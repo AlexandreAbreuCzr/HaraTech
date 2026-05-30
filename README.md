@@ -92,6 +92,16 @@ HaraTech/
 
 ---
 
+## 📈 Histórico de Desenvolvimento
+
+### v0.1 - Versão Inicial
+
+- Leitura do sensor de umidade
+- Controle automático da bomba
+- Exibição da umidade no LCD 16x2
+- Implementação para Arduino Uno
+- Migração inicial para ESP32
+
 ## 👨‍💻 Equipe
 
 ### Alunos
