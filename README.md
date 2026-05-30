@@ -1,3 +1,5 @@
+![Banner](Imagens/logo.png)
+
 # 🚀 Hara Tech
 
 Sistema de automação e monitoramento desenvolvido utilizando Arduino e ESP32, com foco em irrigação inteligente, monitoramento remoto e integração web.
