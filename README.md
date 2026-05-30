@@ -1,4 +1,4 @@
-![Banner](Imagens/logo.jpeg)
+![Banner](imagens/logo.jpeg)
 
 # 🚀 Hara Tech
 
