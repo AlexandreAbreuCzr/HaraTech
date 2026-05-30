@@ -134,3 +134,6 @@ Demonstrar a aplicação prática da programação, eletrônica e automação na
 Tecnologia, Automação e Inovação.
 
 </div>
+
+
+<font dir="auto" style="vertical-align: inherit;"><font dir="auto" style="vertical-align: inherit;">Esta obra está licenciada sob a Licença </font></font><a href="https://creativecommons.org/licenses/by-nc/4.0/"><font dir="auto" style="vertical-align: inherit;"><font dir="auto" style="vertical-align: inherit;">Internacional Creative Commons Atribuição-NãoComercial 4.0.</font></font></a><img src="https://mirrors.creativecommons.org/presskit/icons/cc.svg" alt="" style="max-width: 1em;max-height:1em;margin-left: .2em;"><img src="https://mirrors.creativecommons.org/presskit/icons/by.svg" alt="" style="max-width: 1em;max-height:1em;margin-left: .2em;"><img src="https://mirrors.creativecommons.org/presskit/icons/nc.svg" alt="" style="max-width: 1em;max-height:1em;margin-left: .2em;">
