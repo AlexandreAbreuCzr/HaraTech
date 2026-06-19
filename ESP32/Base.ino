@@ -9,7 +9,7 @@ LiquidCrystal lcd(23, 22, 21, 19, 18, 5);
 
 Preferences prefs;
 
-String API_URL = "http://SEU_SERVIDOR/api";
+String API_URL = "http://API/api";
 String deviceId = "";
 
 void conectarWifi() {
