@@ -8,37 +8,48 @@ Sistema de automação e monitoramento desenvolvido utilizando Arduino e ESP32, 
 
 ## 📖 Sobre o Projeto
 
-O Hara Tech foi desenvolvido para automatizar processos de monitoramento e controle utilizando microcontroladores.
+O Hara Tech é uma plataforma de irrigação inteligente desenvolvida utilizando ESP32, com foco em monitoramento remoto, automação e gerenciamento de hortas através da internet.
+
+O sistema combina hardware e software para permitir o controle e acompanhamento de áreas de cultivo em tempo real por meio de uma plataforma web centralizada.
 
 Atualmente o sistema conta com:
 
 * 🌱 Monitoramento da umidade do solo
-* 💧 Acionamento automático de bomba d'água
+* 💧 Acionamento automático da irrigação
 * 📟 Exibição de informações em LCD 16x2
-* 📡 Compatibilidade com ESP32
-* 🌐 Interface Web para monitoramento e controle
-* 🔌 Compatibilidade com Arduino Uno
+* 📡 Conectividade Wi-Fi utilizando ESP32
+* 🌐 Plataforma web para gerenciamento remoto
+* 👤 Sistema de usuários e autenticação
+* 🔗 Associação de dispositivos através de código de ativação
+* 🪴 Suporte a múltiplas zonas de irrigação
+* 📊 Monitoramento e armazenamento de dados
 
-O projeto foi criado com fins educacionais e tecnológicos, visando aplicar conceitos de eletrônica, programação, automação e Internet das Coisas (IoT).
+O projeto foi criado com fins educacionais e tecnológicos, visando aplicar conceitos de eletrônica, programação, automação, desenvolvimento web e Internet das Coisas (IoT).
 
 ---
 
 ## ✨ Funcionalidades
 
-### Sistema de Irrigação
+### Sistema Embarcado
 
 * Leitura da umidade do solo
-* Controle automático da bomba
-* Exibição em LCD
-* Configuração de limite de umidade
+* Controle automático da irrigação
+* Controle de bomba d'água
+* Exibição de informações em LCD
+* Conexão Wi-Fi
+* Configuração de rede através de portal próprio
+* Comunicação com API via HTTP REST
 
-### Sistema Web ESP32
+### Plataforma Web
 
-* Conexão via Wi-Fi
-* Interface acessível pelo navegador
+* Cadastro e autenticação de usuários
+* Gerenciamento de dispositivos
+* Associação de dispositivos à conta do usuário
 * Monitoramento remoto
-* Controle de dispositivos conectados
-* Base para futuras expansões IoT
+* Visualização das leituras dos sensores
+* Controle remoto da irrigação
+* Gerenciamento de múltiplos dispositivos
+* Gerenciamento de múltiplas zonas de irrigação
 
 ---
 
@@ -46,7 +57,6 @@ O projeto foi criado com fins educacionais e tecnológicos, visando aplicar conc
 
 ### Hardware
 
-* Arduino Uno
 * ESP32
 * Sensor de Umidade do Solo
 * LCD 16x2
@@ -59,6 +69,11 @@ O projeto foi criado com fins educacionais e tecnológicos, visando aplicar conc
 
 * Arduino IDE
 * C++
+* Node.js
+* Express
+* PostgreSQL
+* Prisma ORM
+* TypeScript
 * HTML
 * CSS
 * JavaScript
@@ -70,11 +85,8 @@ O projeto foi criado com fins educacionais e tecnológicos, visando aplicar conc
 ```text
 HaraTech/
 │
-├── Arduino/
-│   └── irrigacao.ino
-│
 ├── ESP32/
-│   ├── irrigacao_esp32.ino
+│   ├── haratech_code.ino
 │   ├── web_server.ino
 │   └── paginas_web/
 │
@@ -96,24 +108,21 @@ HaraTech/
 
 ### v0.1 - Versão Inicial
 
-- Leitura do sensor de umidade
-- Controle automático da bomba
-- Exibição da umidade no LCD 16x2
-- Implementação para Arduino Uno
-- Migração inicial para ESP32
+* Leitura do sensor de umidade
+* Controle automático da bomba
+* Exibição da umidade no LCD 16x2
+* Implementação inicial do sistema de irrigação
 
-## 👨‍💻 Equipe
+### v0.2 - Plataforma Conectada
 
-### Alunos
+* Migração completa para ESP32
+* Comunicação via Wi-Fi
+* Estrutura da API central
+* Sistema de usuários
+* Associação de dispositivos
+* Estrutura para múltiplas zonas de irrigação
+* Desenvolvimento da plataforma web
 
-* Alexandre Abreu Czarnieski
-* Amanda Maria Fernanda de Quadros Geteski
-* Natan José Rodrigues
-* Larissa Lopes Zanetti
-
-### Orientadora
-
-* Prof. Hiana Amaral Zubreski Franco
 
 ---
 
