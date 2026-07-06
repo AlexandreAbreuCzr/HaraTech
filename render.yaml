@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     rootDir: hara-tech-api
-    buildCommand: npm install && npm run db:generate && npm run build
+    buildCommand: npm install --include=dev && npm run db:generate && npm run build
     startCommand: npx prisma db push && npm start
     healthCheckPath: /api/v1/health
     envVars:
