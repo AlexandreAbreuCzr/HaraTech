@@ -5,8 +5,7 @@ services:
     plan: free
     rootDir: hara-tech-api
     buildCommand: npm install && npm run db:generate && npm run build
-    preDeployCommand: npm run db:push
-    startCommand: npm start
+    startCommand: npx prisma db push && npm start
     healthCheckPath: /api/v1/health
     envVars:
       - key: DATABASE_URL
