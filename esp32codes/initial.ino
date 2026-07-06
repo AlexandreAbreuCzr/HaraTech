@@ -12,7 +12,7 @@ Preferences prefs;
 WiFiClient plainClient;
 WiFiClientSecure secureClient;
 
-const char* API_URL = "http://192.168.3.134:3000/api/v1";
+const char* API_URL = "https://hara-tech-api.onrender.com/api/v1";
 const char* PROVISIONING_SECRET = "troque-por-um-segredo-forte-com-pelo-menos-32-caracteres";//TROQUE_PELO_DEVICE_PROVISIONING_SECRET;
 
 const int SOIL_SENSOR_PIN = 34;
