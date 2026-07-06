@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import Layout from '../components/Layout'
-import { HardDrive, Wifi, WifiOff, Link2, ArrowRight, Search, Plus } from 'lucide-react'
+import { HardDrive, Wifi, WifiOff, Link2, ArrowRight, Search } from 'lucide-react'
 import type { Device } from '../lib/types'
 
 export default function Devices() {

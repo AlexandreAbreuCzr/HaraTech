@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { Droplets } from 'lucide-react'
+
 
 export default function Register() {
   const [name, setName] = useState('')

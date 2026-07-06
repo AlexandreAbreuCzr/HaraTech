@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import {
   ArrowLeft, Power, PowerOff, RotateCcw, RefreshCw,
-  Zap, ZapOff, Trash2, Plus, Wifi, Timer, Droplets, Cpu
+  Zap, ZapOff, Trash2, Plus, Cpu
 } from 'lucide-react'
 import type { Zone, DeviceConfig, Command } from '../lib/types'
 

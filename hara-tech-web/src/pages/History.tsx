@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import Layout from '../components/Layout'
 import { historicoStore } from '../lib/store'
-import { History as HistoryIcon, Droplets, Filter, CheckCircle2, XCircle, Timer } from 'lucide-react'
-import type { RegaEvento } from '../lib/types'
+import { History as HistoryIcon, Droplets, CheckCircle2, XCircle, Timer } from 'lucide-react'
 
 export default function History() {
   const [eventos] = useState(historicoStore.list())

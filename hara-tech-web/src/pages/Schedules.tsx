@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
 import { programacoesStore, culturasStore } from '../lib/store'
 import { api } from '../lib/api'
-import { CalendarClock, Plus, Clock, Trash2, Power, PowerOff, Sprout, HardDrive } from 'lucide-react'
+import { CalendarClock, Plus, Clock, Trash2, Power, PowerOff, Sprout } from 'lucide-react'
 import type { Programacao, Device, Cultura } from '../lib/types'
 
 const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']

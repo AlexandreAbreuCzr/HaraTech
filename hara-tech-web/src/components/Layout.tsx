@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import {
   LayoutDashboard, HardDrive, Sprout, CalendarClock,
-  History, LogOut, Menu, X, Droplets
+  History, LogOut, Menu, X
 } from 'lucide-react'
 
 const nav = [

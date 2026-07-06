@@ -4,8 +4,8 @@ import { api } from '../lib/api'
 import { culturasStore, programacoesStore } from '../lib/store'
 import Layout from '../components/Layout'
 import {
-  HardDrive, Sprout, CalendarClock, Droplets,
-  Wifi, WifiOff, TrendingUp, Clock
+  HardDrive, Sprout, CalendarClock,
+  Wifi, WifiOff, Clock
 } from 'lucide-react'
 import type { Device } from '../lib/types'
 
