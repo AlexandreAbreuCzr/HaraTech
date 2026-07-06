@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: hara-tech-api
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run db:generate && npm run build
+    preDeployCommand: npm run db:push
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hara-tech-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: NODE_ENV
+        value: production
+      - key: DEVICE_PROVISIONING_SECRET
+        generateValue: true
+      - key: DEVICE_ONLINE_WINDOW_SECONDS
+        value: 120
+
+databases:
+  - name: hara-tech-db
+    plan: free
+    databaseName: haratech
+    user: haratech_user

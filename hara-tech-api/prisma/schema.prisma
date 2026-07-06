@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  devices Device[]
+
+  @@map("users")
+}
+
+model Device {
+  id              String    @id @default(uuid())
+  deviceId        String    @unique
+  chipId          String    @unique
+  deviceTokenHash String?   @unique
+  name            String?
+  isLinked        Boolean   @default(false)
+  ownerId         String?
+  lastSeen        DateTime?
+  lastIp          String?
+  lastRssi        Int?
+  createdAt       DateTime  @default(now())
+
+  owner          User?           @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  config         DeviceConfig?
+  zones          Zone[]
+  zoneActuators  ZoneActuator[]
+  telemetry      DeviceTelemetry[]
+  sensors        Sensor[]
+  irrigationLogs IrrigationLog[]
+  commands       Command[]
+
+  @@map("devices")
+}
+
+model Zone {
+  id               String              @id @default(uuid())
+  name             String
+  index            Int
+  isActive         Boolean             @default(false)
+  enabled          Boolean             @default(true)
+  desiredState     ZoneDesiredState    @default(CLOSED)
+  appliedState     ZoneAppliedState    @default(UNKNOWN)
+  confirmedState   ZoneConfirmedState  @default(UNAVAILABLE)
+  lastAppliedAngle Int?
+  lastTelemetryAt  DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  actuator       ZoneActuator?
+  telemetryZones DeviceTelemetryZone[]
+  irrigationLogs IrrigationLog[]
+
+  @@unique([deviceId, index])
+  @@map("zones")
+}
+
+model DeviceConfig {
+  id                        String              @id @default(uuid())
+  operationMode             DeviceOperationMode @default(AUTO)
+  moistureThreshold         Int                 @default(35)
+  heartbeatIntervalSeconds  Int                 @default(60)
+  telemetryIntervalSeconds  Int                 @default(60)
+  configSyncIntervalSeconds Int                 @default(300)
+  pumpMode                  PumpMode            @default(AUTO)
+  maxSimultaneousZones      Int?
+  configVersion             Int                 @default(1)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+
+  deviceId String @unique
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@map("device_configs")
+}
+
+model ZoneActuator {
+  id          String         @id @default(uuid())
+  type        ActuatorType   @default(SERVO)
+  driver      ActuatorDriver @default(ESP32_PWM)
+  channel     Int
+  openAngle   Int            @default(90)
+  closedAngle Int            @default(10)
+  minPulseUs  Int            @default(500)
+  maxPulseUs  Int            @default(2500)
+  inverted    Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  zoneId String @unique
+  zone   Zone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, driver, channel])
+  @@map("zone_actuators")
+}
+
+model DeviceTelemetry {
+  id                  String   @id @default(uuid())
+  soilMoisture        Int
+  pumpOn              Boolean
+  firmwareTimestampMs Float?
+  rssi                Int?
+  lastIp              String?
+  uptimeSeconds       Int?
+  firmwareVersion     String?
+  createdAt           DateTime @default(now())
+
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  zones DeviceTelemetryZone[]
+
+  @@index([deviceId, createdAt])
+  @@map("device_telemetry")
+}
+
+model DeviceTelemetryZone {
+  id             String              @id @default(uuid())
+  zoneIndex      Int
+  desiredState   ZoneDesiredState?
+  appliedState   ZoneAppliedState    @default(UNKNOWN)
+  confirmedState ZoneConfirmedState  @default(UNAVAILABLE)
+  servoAngle     Int?
+  createdAt      DateTime            @default(now())
+
+  telemetryId String
+  telemetry   DeviceTelemetry @relation(fields: [telemetryId], references: [id], onDelete: Cascade)
+
+  zoneId String?
+  zone   Zone? @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  @@index([telemetryId])
+  @@index([zoneId, createdAt])
+  @@map("device_telemetry_zones")
+}
+
+model Sensor {
+  id        String     @id @default(uuid())
+  type      SensorType
+  label     String?
+  createdAt DateTime   @default(now())
+
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  readings SensorReading[]
+
+  @@map("sensors")
+}
+
+model SensorReading {
+  id         String   @id @default(uuid())
+  value      Float
+  unit       String
+  recordedAt DateTime @default(now())
+
+  sensorId String
+  sensor   Sensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+
+  @@map("sensor_readings")
+}
+
+model IrrigationLog {
+  id              String      @id @default(uuid())
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationSeconds Int?
+  triggeredBy     TriggerType @default(MANUAL)
+  createdAt       DateTime    @default(now())
+
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  zoneId String?
+  zone   Zone? @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  @@map("irrigation_logs")
+}
+
+enum SensorType {
+  SOIL_MOISTURE
+  TEMPERATURE
+  HUMIDITY
+  RAIN
+  FLOW
+}
+
+enum TriggerType {
+  MANUAL
+  SCHEDULED
+  SENSOR
+  AUTOMATION
+}
+
+enum DeviceOperationMode {
+  AUTO
+  MANUAL
+  OFF
+}
+
+enum PumpMode {
+  AUTO
+  FORCED_ON
+  FORCED_OFF
+}
+
+enum ZoneDesiredState {
+  OPEN
+  CLOSED
+}
+
+enum ZoneAppliedState {
+  OPEN
+  CLOSED
+  UNKNOWN
+}
+
+enum ZoneConfirmedState {
+  OPEN
+  CLOSED
+  UNKNOWN
+  UNAVAILABLE
+}
+
+enum ActuatorType {
+  SERVO
+}
+
+enum ActuatorDriver {
+  ESP32_PWM
+  PCA9685
+}
+
+enum CommandType {
+  OPEN_ZONE
+  CLOSE_ZONE
+  PUMP_ON
+  PUMP_OFF
+  SYNC_CONFIG
+  RESTART
+  OTA_UPDATE
+}
+
+enum CommandStatus {
+  PENDING
+  SENT
+  ACKED
+  FAILED
+}
+
+model Command {
+  id        String        @id @default(uuid())
+  type      CommandType
+  payload   Json?
+  status    CommandStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  sentAt    DateTime?
+  ackedAt   DateTime?
+  failedAt  DateTime?
+  failReason String?
+
+  deviceId String
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, status])
+  @@index([deviceId, createdAt])
+  @@map("commands")
+}

@@ -1,0 +1,190 @@
+ANÁLISE DO PROJETO HARA TECH
+==============================
+
+VISÃO GERAL
+-----------
+Plataforma IoT modular para automação, começando pela irrigação inteligente,
+mas preparada para suportar outros dispositivos e funcionalidades futuramente.
+
+O sistema é dividido em três partes principais:
+- Backend (API REST)
+- Firmware dos dispositivos ESP32
+- Dashboard (web e futuramente aplicativo mobile)
+
+HARDWARE
+--------
+O hardware e o software evoluem juntos. Componentes envolvidos:
+- Caixa própria impressa em 3D com tampa personalizada
+- Conectores próprios
+- Placa baseada em ESP32
+- Sensores (umidade, etc.)
+- Servos (controle de zonas)
+- Display
+- Cada dispositivo é um "Dispositivo Hara" físico independente
+
+STACK TECNOLÓGICO
+-----------------
+- Backend: Node.js + TypeScript + Express
+- ORM: Prisma
+- Banco: PostgreSQL
+- Autenticação: JWT (usuários) + Token criptográfico (dispositivos)
+- Validação: Zod
+- Firmware: Arduino Framework (C++) com WiFiManager, HTTPClient, ArduinoJson
+- Display: LCD 16x2 via LiquidCrystal
+
+ARQUITETURA (Layers)
+--------------------
+Request → Routes → Controllers → Services → Prisma → PostgreSQL
+                          ↕
+                    Middlewares (auth)
+                          ↕
+                    ErrorHandler (AppError + ZodError)
+
+Controllers são finos (só validam e delegam).
+Services contêm toda lógica de negócio.
+
+ESTRUTURA DO PROJETO
+--------------------
+api/
+├── esp32codes/initial.ino              # Firmware ESP32
+├── hara-tech-api/                      # Backend
+│   ├── src/
+│   │   ├── routes/                     # auth.routes.ts, device.routes.ts
+│   │   ├── controllers/                # auth.controller, device.controller, zone.controller
+│   │   ├── services/                   # auth.service, device.service, zone.service
+│   │   ├── middlewares/                # authenticate (JWT), deviceAuth (device token), errorHandler
+│   │   ├── utils/                      # jwt, deviceAuth, deviceId, AppError
+│   │   ├── lib/prisma.ts               # Prisma client
+│   │   ├── app.ts                      # Config Express + rotas + aliases legados
+│   │   └── server.ts                   # Inicialização do servidor
+│   ├── prisma/schema.prisma            # Modelos do banco
+│   └── package.json
+├── AI_context.md                       # Documentação arquitetural
+├── Readme.md                           # Status atual do projeto
+└── text.txt                            # Esta análise
+
+BANCO DE DADOS (Prisma Schema - 8 modelos principais)
+------------------------------------------------------
+- User: id, name, email (único), passwordHash, createdAt. Relaciona com devices.
+  Cada usuário pode possuir vários dispositivos.
+- Device: id, deviceId (HT-XXXXXX único), chipId (único), deviceTokenHash (SHA-256),
+  name, isLinked, ownerId, lastSeen, lastIp, lastRssi, createdAt.
+  Relaciona com config (1:1), zones, zoneActuators, telemetry, sensors, irrigationLogs.
+  Cada dispositivo funciona de forma independente.
+- Zone: id, name, index (único por device), isActive, enabled, desiredState (OPEN/CLOSED),
+  appliedState (OPEN/CLOSED/UNKNOWN), confirmedState (OPEN/CLOSED/UNKNOWN/UNAVAILABLE),
+  lastAppliedAngle, lastTelemetryAt. Relaciona com actuator, telemetryZones, irrigationLogs.
+  Cada zona pode ter seu próprio servo, sensor, configurações e estado.
+- DeviceConfig: operationMode (AUTO/MANUAL/OFF), moistureThreshold, heartbeatIntervalSeconds,
+  telemetryIntervalSeconds, configSyncIntervalSeconds, pumpMode, maxSimultaneousZones, configVersion.
+- ZoneActuator: type (SERVO), driver (ESP32_PWM/PCA9685), channel, openAngle, closedAngle,
+  minPulseUs, maxPulseUs, inverted. Unique por [deviceId, driver, channel] e zoneId único.
+- DeviceTelemetry: soilMoisture, pumpOn, firmwareTimestampMs. Index [deviceId, createdAt].
+  Relaciona com DeviceTelemetryZone (estado de cada zona na telemetria).
+- Sensor: type (SOIL_MOISTURE/TEMPERATURE/HUMIDITY/RAIN/FLOW), label. Relaciona com SensorReading.
+- IrrigationLog: startedAt, endedAt, durationSeconds, triggeredBy (MANUAL/SCHEDULED/SENSOR/AUTOMATION).
+
+Enums importantes:
+- ZoneDesiredState: OPEN, CLOSED
+- ZoneAppliedState: OPEN, CLOSED, UNKNOWN
+- ZoneConfirmedState: OPEN, CLOSED, UNKNOWN, UNAVAILABLE
+- ActuatorType: SERVO
+- ActuatorDriver: ESP32_PWM, PCA9685
+
+API ENDPOINTS
+-------------
+Autenticação (/api/v1/auth):
+  POST /register      - Criar usuário (name, email, password)
+  POST /login         - Login (email, password) → JWT
+
+Dispositivos (/api/v1/devices):
+  POST /register              - Registrar ESP32 automaticamente (protegido por X-Provisioning-Secret)
+  POST /:deviceId/heartbeat   - Heartbeat ESP32 (protegido por X-Device-Token)
+  POST /link                  - Vincular device ao usuário informando código HT-XXXXXX (JWT)
+  GET  /                      - Listar devices do usuário (JWT)
+  POST /:deviceId/zones       - Criar zona (JWT)
+  GET  /:deviceId/zones       - Listar zonas (JWT)
+  PATCH /:deviceId/zones/:zoneId  - Atualizar zona (JWT)
+  DELETE /:deviceId/zones/:zoneId - Remover zona (JWT)
+
+Aliases legados: /api/* e /* mantidos para compatibilidade com firmware antigo.
+
+FLUXO DE FUNCIONAMENTO
+----------------------
+1. Dispositivo é ligado pela primeira vez → registro automático na API
+2. Usuário informa o código HT-XXXXXX para vincular o dispositivo à sua conta
+3. A partir daí o usuário gerencia zonas, monitora e configura remotamente
+4. O dashboard (web/app) é a principal interface do usuário
+
+FLUXO TÉCNICO (ESP32)
+---------------------
+1. ESP32 liga → WiFiManager abre portal de configuração → conecta Wi-Fi
+2. Carrega deviceId e deviceToken salvos em Preferences (NVS)
+3. Se não tiver credenciais, registra na API enviando chipId + X-Provisioning-Secret
+4. API retorna deviceId (HT-XXXXXX) + deviceToken. ESP32 salva localmente.
+5. ESP32 envia heartbeat periódico (60s) com X-Device-Token + IP + RSSI
+6. API atualiza lastSeen, lastIp, lastRssi. isOnline calculado dinamicamente (janela 120s).
+7. ESP32 lê sensor de umidade → controle local (modo auto/manual/off)
+8. Display LCD mostra informações de status
+
+SEGURANÇA
+---------
+- Senhas: bcrypt com 12 rounds de salt
+- Device token: 32 bytes aleatórios (base64url), armazenado como hash SHA-256
+- Timing-safe comparison (timingSafeEqual) para evitar timing attacks
+- Rate limiting global (200 req/15min) + específico ESP32 (60 req/min)
+- Provisionamento protegido por segredo compartilhado (X-Provisioning-Secret)
+- JWT com expiry configurável (padrão 7 dias)
+- Erros em produção não vazam detalhes internos
+
+FILOSOFIA DO PROJETO
+--------------------
+- Fácil de instalar e fácil de usar
+- Qualquer pessoa consegue ligar, conectar ao Wi-Fi, vincular à conta
+  e começar a usar em poucos minutos
+- Sem configurações complicadas
+- Experiência simples e intuitiva
+
+DIFERENCIAIS DE DESIGN
+----------------------
+- Modelagem genérica de atuadores: type + driver + channel permite servo, relé,
+  válvula, PCA9685 sem mudar schema
+- 3 estados por zona: desiredState (intenção da API), appliedState (tentativa do ESP32),
+  confirmedState (reservado para sensores futuros)
+- Zonas dinâmicas: sem limite fixo, suporta 1 a 100+ zonas,
+  cada zona com seu próprio servo, sensor, configurações e estado
+- isOnline calculado dinamicamente baseado em lastSeen + janela configurável
+- Rotação automática de token: ESP32 tenta re-registrar se heartbeat retornar 401
+- Número de zonas dinâmico por dispositivo
+- Arquitetura preparada para expansão: irrigação é apenas a primeira aplicação
+
+ESCALABILIDADE
+--------------
+- Sempre evitar soluções específicas apenas para irrigação
+- Preferir arquiteturas genéricas e modulares
+- Projetar para 100+ dispositivos e 500+ zonas sem mudanças arquiteturais
+- Novos módulos devem ser plugáveis sem alterar a base
+
+IMPLEMENTADO VS. NÃO IMPLEMENTADO
+----------------------------------
+✅ Implementado:
+  - CRUD de usuários com autenticação JWT
+  - Registro e autenticação de dispositivos ESP32
+  - Heartbeat com detecção online/offline
+  - CRUD de zonas com índices únicos automáticos
+  - Rate limiting e proteção de rotas
+  - Aliases legados para compatibilidade
+
+❌ Não implementado (planejado para o futuro):
+  - Endpoint para ESP32 buscar configuração remota
+  - Endpoint para ESP32 enviar telemetria (umidade, bomba, estado zonas)
+  - Persistência histórica de telemetria vinda do firmware
+  - Comandos remotos para dispositivos e zonas
+  - Sincronização de configuração bidirecional
+  - OTA (atualização over-the-air do firmware)
+  - Notificações
+  - Histórico completo com gráficos
+  - Automações baseadas em regras
+  - Dashboard web completo com login, cadastro, gerenciamento,
+    monitoramento em tempo real, gráficos, histórico, configurações
+  - Aplicativo mobile
