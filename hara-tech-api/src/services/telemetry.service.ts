@@ -110,3 +110,30 @@ export async function processTelemetry(
 
   return telemetry;
 }
+
+export async function getLatestTelemetry(deviceInternalId: string) {
+  const telemetry = await prisma.deviceTelemetry.findFirst({
+    where: { deviceId: deviceInternalId },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      soilMoisture: true,
+      pumpOn: true,
+      rssi: true,
+      lastIp: true,
+      uptimeSeconds: true,
+      firmwareVersion: true,
+      createdAt: true,
+      zones: {
+        select: {
+          zoneIndex: true,
+          desiredState: true,
+          appliedState: true,
+          servoAngle: true,
+        },
+      },
+    },
+  });
+
+  return telemetry;
+}

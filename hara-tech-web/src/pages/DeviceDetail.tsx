@@ -4,9 +4,9 @@ import { api } from '../lib/api'
 import Layout from '../components/Layout'
 import {
   ArrowLeft, Power, PowerOff, RotateCcw, RefreshCw,
-  Zap, ZapOff, Trash2, Plus, Cpu
+  Zap, ZapOff, Trash2, Plus, Cpu, Droplets, Wifi
 } from 'lucide-react'
-import type { Zone, DeviceConfig, Command } from '../lib/types'
+import type { Zone, DeviceConfig, Command, Telemetry } from '../lib/types'
 
 export default function DeviceDetail() {
   const { deviceId } = useParams<{ deviceId: string }>()
@@ -17,17 +17,20 @@ export default function DeviceDetail() {
   const [newZoneName, setNewZoneName] = useState('')
   const [sending, setSending] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [telemetry, setTelemetry] = useState<Telemetry | null>(null)
 
   const fetchAll = async () => {
     if (!deviceId) return
-    const [z, c, cmds] = await Promise.all([
+    const [z, c, cmds, t] = await Promise.all([
       api.zonas.listar(deviceId).catch(() => ({ zones: [] })),
       api.config.obter(deviceId).catch(() => null),
       api.comandos.listar(deviceId).catch(() => ({ commands: [] })),
+      api.telemetria.ultima(deviceId).catch(() => null),
     ])
     setZones(z.zones)
     setConfig(c)
     setCommands(cmds.commands)
+    setTelemetry(t)
   }
 
   useEffect(() => { fetchAll() }, [deviceId])
@@ -110,6 +113,50 @@ export default function DeviceDetail() {
             </button>
           </div>
         </div>
+
+        {telemetry && (
+          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 mb-4">
+            <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider mb-3">Telemetria ao Vivo</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-zinc-900/50 rounded-lg p-3">
+                <div className="flex items-center gap-1.5 text-xs text-zinc-600 mb-1">
+                  <Droplets className="size-3" /> Umidade do Solo
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-zinc-800 rounded-full h-2.5">
+                    <div
+                      className={`h-2.5 rounded-full transition-all ${
+                        telemetry.soilMoisture < (config?.moistureThreshold ?? 35)
+                          ? 'bg-red-500'
+                          : telemetry.soilMoisture < 70
+                          ? 'bg-yellow-500'
+                          : 'bg-blue-500'
+                      }`}
+                      style={{ width: `${telemetry.soilMoisture}%` }}
+                    />
+                  </div>
+                  <span className="text-lg font-bold text-white">{telemetry.soilMoisture}%</span>
+                </div>
+              </div>
+              <div className="bg-zinc-900/50 rounded-lg p-3">
+                <div className="text-xs text-zinc-600 mb-1">Bomba</div>
+                <div className={`text-lg font-bold ${telemetry.pumpOn ? 'text-green-400' : 'text-zinc-500'}`}>
+                  {telemetry.pumpOn ? 'Ligada' : 'Desligada'}
+                </div>
+              </div>
+              <div className="bg-zinc-900/50 rounded-lg p-3">
+                <div className="flex items-center gap-1.5 text-xs text-zinc-600 mb-1">
+                  <Wifi className="size-3" /> Sinal
+                </div>
+                <div className="text-lg font-bold text-white">{telemetry.rssi ?? '-'} dBm</div>
+              </div>
+              <div className="bg-zinc-900/50 rounded-lg p-3">
+                <div className="text-xs text-zinc-600 mb-1">Atualizado</div>
+                <div className="text-sm font-medium text-white">{new Date(telemetry.createdAt).toLocaleTimeString()}</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {config && (
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 mb-4">

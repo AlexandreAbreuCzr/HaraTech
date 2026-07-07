@@ -57,4 +57,7 @@ export const api = {
   config: {
     obter: (deviceId: string) => request(`/devices/${deviceId}/config`),
   },
+  telemetria: {
+    ultima: (deviceId: string) => request(`/devices/${deviceId}/telemetry/latest`),
+  },
 }

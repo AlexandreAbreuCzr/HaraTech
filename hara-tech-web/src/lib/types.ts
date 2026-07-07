@@ -88,6 +88,25 @@ export interface Programacao {
   criadoEm: string
 }
 
+export interface TelemetryZone {
+  zoneIndex: number
+  desiredState: string | null
+  appliedState: string | null
+  servoAngle: number | null
+}
+
+export interface Telemetry {
+  id: string
+  soilMoisture: number
+  pumpOn: boolean
+  rssi: number | null
+  lastIp: string | null
+  uptimeSeconds: number | null
+  firmwareVersion: string | null
+  createdAt: string
+  zones: TelemetryZone[]
+}
+
 export interface RegaEvento {
   id: string
   dispositivoId: string

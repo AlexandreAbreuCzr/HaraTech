@@ -18,7 +18,10 @@ import {
   deleteZoneHandler,
 } from '../controllers/zone.controller';
 import { getDeviceConfigHandler } from '../controllers/config.controller';
-import { telemetryHandler } from '../controllers/telemetry.controller';
+import {
+  telemetryHandler,
+  getLatestTelemetryHandler,
+} from '../controllers/telemetry.controller';
 import {
   getPendingCommandsHandler,
   acknowledgeCommandHandler,
@@ -81,6 +84,7 @@ router.post('/:deviceId/zones', createZoneHandler);
 router.get('/:deviceId/zones', listZonesHandler);
 router.patch('/:deviceId/zones/:zoneId', updateZoneHandler);
 router.delete('/:deviceId/zones/:zoneId', deleteZoneHandler);
+router.get('/:deviceId/telemetry/latest', getLatestTelemetryHandler);
 router.post('/:deviceId/commands', createCommandHandler);
 router.get('/:deviceId/commands', getDeviceCommandsHandler);
 

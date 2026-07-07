@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { DeviceAuthenticatedRequest } from '../middlewares/deviceAuth';
-import { processTelemetry } from '../services/telemetry.service';
+import { processTelemetry, getLatestTelemetry } from '../services/telemetry.service';
 
 const telemetryZoneSchema = z.object({
   zoneIndex: z.number().int().min(0).max(255),
@@ -32,6 +32,19 @@ export async function telemetryHandler(
     const result = await processTelemetry(req.device!.id, input);
 
     res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getLatestTelemetryHandler(
+  req: DeviceAuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const telemetry = await getLatestTelemetry(req.device!.id);
+    res.json(telemetry);
   } catch (err) {
     next(err);
   }

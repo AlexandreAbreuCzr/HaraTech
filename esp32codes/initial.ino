@@ -17,7 +17,7 @@ const char* PROVISIONING_SECRET = "troque-por-um-segredo-forte-com-pelo-menos-32
 
 const int SOIL_SENSOR_PIN = 34;
 const int PUMP_RELAY_PIN = 26;
-const bool PUMP_ACTIVE_HIGH = true;
+const bool PUMP_ACTIVE_HIGH = false;
 
 const int SOIL_RAW_DRY = 4095;
 const int SOIL_RAW_WET = 1200;
