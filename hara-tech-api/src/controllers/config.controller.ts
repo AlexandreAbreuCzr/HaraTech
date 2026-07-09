@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { DeviceAuthenticatedRequest } from '../middlewares/deviceAuth';
 import { getDeviceConfig } from '../services/config.service';
+import { sendSuccess } from '../utils/response';
 
 const configQuerySchema = z.object({
   configVersion: z
@@ -25,7 +26,7 @@ export async function getDeviceConfigHandler(
       return;
     }
 
-    res.json(config);
+    sendSuccess(res, config);
   } catch (err) {
     next(err);
   }

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { registerUser, loginUser } from '../services/auth.service';
+import { sendSuccess } from '../utils/response';
 
 const registerSchema = z.object({
   name: z.string().trim().min(2, 'Nome deve ter ao menos 2 caracteres'),
@@ -25,7 +26,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
   try {
     const data = registerSchema.parse(req.body);
     const result = await registerUser(data);
-    res.status(201).json(result);
+    sendSuccess(res, result, 'Usuario cadastrado com sucesso', 201);
   } catch (err) {
     next(err);
   }
@@ -35,7 +36,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     const data = loginSchema.parse(req.body);
     const result = await loginUser(data);
-    res.json(result);
+    sendSuccess(res, result, 'Login realizado com sucesso');
   } catch (err) {
     next(err);
   }

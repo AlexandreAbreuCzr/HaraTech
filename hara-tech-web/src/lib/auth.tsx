@@ -22,10 +22,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const storedName = localStorage.getItem('user_name')
     if (getToken()) {
       try {
         const payload = JSON.parse(atob(getToken()!.split('.')[1]))
-        setUser({ userId: payload.userId, email: payload.email })
+        setUser({ userId: payload.userId, email: payload.email, name: storedName || undefined })
       } catch { setToken(null) }
     }
     setLoading(false)
@@ -35,19 +36,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await api.auth.login({ email, password })
     setToken(res.token)
     const payload = JSON.parse(atob(res.token.split('.')[1]))
-    setUser({ userId: payload.userId, email: payload.email })
+    const name = res.user?.name
+    if (name) localStorage.setItem('user_name', name)
+    setUser({ userId: payload.userId, email: payload.email, name: name || undefined })
   }
 
   const register = async (name: string, email: string, password: string) => {
     const res = await api.auth.register({ name, email, password })
     setToken(res.token)
     const payload = JSON.parse(atob(res.token.split('.')[1]))
-    setUser({ userId: payload.userId, email: payload.email })
+    const userName = res.user?.name || name
+    localStorage.setItem('user_name', userName)
+    setUser({ userId: payload.userId, email: payload.email, name: userName })
   }
 
   const logout = () => {
     setToken(null)
     setUser(null)
+    localStorage.removeItem('user_name')
   }
 
   return (

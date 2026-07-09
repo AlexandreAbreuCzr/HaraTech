@@ -8,6 +8,7 @@ import {
 } from '../services/device.service';
 import { AuthenticatedRequest } from '../middlewares/authenticate';
 import { DeviceAuthenticatedRequest } from '../middlewares/deviceAuth';
+import { sendSuccess } from '../utils/response';
 
 const registerDeviceSchema = z.object({
   chipId: z.string().trim().min(1, 'chipId obrigatorio').max(64),
@@ -38,10 +39,12 @@ export async function registerDeviceHandler(
     const { chipId, rotateToken } = registerDeviceSchema.parse(req.body);
     const result = await registerDevice(chipId, { rotateToken });
 
-    // The current ESP32 sketch expects HTTP 200, including first registration.
     res.status(200).json({
-      deviceId: result.deviceId,
-      deviceToken: result.deviceToken,
+      success: true,
+      data: {
+        deviceId: result.deviceId,
+        deviceToken: result.deviceToken,
+      },
     });
   } catch (err) {
     next(err);
@@ -56,7 +59,7 @@ export async function linkDeviceHandler(
   try {
     const { deviceId } = linkDeviceSchema.parse(req.body);
     const device = await linkDevice(req.user!.userId, deviceId);
-    res.json(device);
+    sendSuccess(res, device, 'Dispositivo vinculado com sucesso');
   } catch (err) {
     next(err);
   }
@@ -69,7 +72,7 @@ export async function getUserDevicesHandler(
 ) {
   try {
     const devices = await getUserDevices(req.user!.userId);
-    res.json({ devices, total: devices.length });
+    sendSuccess(res, { devices, total: devices.length });
   } catch (err) {
     next(err);
   }
@@ -83,7 +86,7 @@ export async function heartbeatHandler(
   try {
     const input = heartbeatSchema.parse(req.body);
     const result = await updateHeartbeat(req.device!.id, input);
-    res.json(result);
+    sendSuccess(res, result);
   } catch (err) {
     next(err);
   }

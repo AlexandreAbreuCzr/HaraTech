@@ -6,15 +6,27 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <LiquidCrystal.h>
+#include <esp_task_wdt.h>
 
 LiquidCrystal lcd(23, 22, 21, 19, 18, 5);
 Preferences prefs;
 WiFiClient plainClient;
 WiFiClientSecure secureClient;
 
-const char* API_URL = "https://hara-tech-api.onrender.com/api/v1";
-const char* PROVISIONING_SECRET = "troque-por-um-segredo-forte-com-pelo-menos-32-caracteres";//TROQUE_PELO_DEVICE_PROVISIONING_SECRET;
+// ============================================================
+// CONFIGURACAO - Ajuste via build flags ou edite aqui
+// ============================================================
+#ifndef API_URL
+#define API_URL "https://hara-tech-api.onrender.com/api/v1"
+#endif
 
+#ifndef PROVISIONING_SECRET
+#define PROVISIONING_SECRET "troque-por-um-segredo-forte-com-pelo-menos-32-caracteres"
+#endif
+
+// ============================================================
+// PINOS E HARDWARE
+// ============================================================
 const int SOIL_SENSOR_PIN = 34;
 const int PUMP_RELAY_PIN = 26;
 const bool PUMP_ACTIVE_HIGH = false;
@@ -23,6 +35,9 @@ const int SOIL_RAW_DRY = 4095;
 const int SOIL_RAW_WET = 1200;
 const int MOISTURE_HYSTERESIS = 5;
 
+// ============================================================
+// TEMPOS E TIMEOUTS
+// ============================================================
 const unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 const unsigned long REGISTER_RETRY_INTERVAL_MS = 30000;
 const unsigned long HEARTBEAT_INTERVAL_MS = 60000;
@@ -32,12 +47,16 @@ const unsigned long CONFIG_SYNC_INTERVAL_MS = 300000;
 const unsigned long TELEMETRY_INTERVAL_MS = 60000;
 const unsigned long COMMAND_INTERVAL_MS = 30000;
 const uint16_t HTTP_TIMEOUT_MS = 10000;
+const unsigned long WDT_TIMEOUT_SEC = 30;
 
 const int MAX_ZONES = 16;
 const int SERVO_FREQ = 50;
 const int SERVO_RESOLUTION = 12;
 const int SERVO_PERIOD_US = 20000;
 
+// ============================================================
+// ESTADO GLOBAL
+// ============================================================
 String deviceId = "";
 String deviceToken = "";
 String chipId = "";
@@ -97,13 +116,18 @@ DeviceCfg config = { 0, "auto", 35, 60, "auto", 0, {}, 0 };
 ZoneState zoneStates[MAX_ZONES];
 int zoneStateCount = 0;
 
+// ============================================================
+// UTILITARIOS
+// ============================================================
+
 String getChipId() {
   return String((uint32_t)ESP.getEfuseMac(), HEX);
 }
 
 bool isProvisioningSecretConfigured() {
-  return String(PROVISIONING_SECRET).length() > 0 &&
-         String(PROVISIONING_SECRET) != "TROQUE_PELO_DEVICE_PROVISIONING_SECRET";
+  String secret = String(PROVISIONING_SECRET);
+  return secret.length() > 0 &&
+         secret != "troque-por-um-segredo-forte-com-pelo-menos-32-caracteres";
 }
 
 String buildApiUrl(const String& path) {
@@ -142,6 +166,10 @@ void showStatus(const String& line1, const String& line2 = "") {
   lcd.setCursor(0, 1);
   lcd.print(line2.substring(0, 16));
 }
+
+// ============================================================
+// PERSISTENCIA (Preferences NVS)
+// ============================================================
 
 void loadCredentials() {
   prefs.begin("hara", false);
@@ -187,12 +215,17 @@ bool hasDeviceCredentials() {
   return deviceId.length() > 0 && deviceToken.length() > 0;
 }
 
+// ============================================================
+// WIFI
+// ============================================================
+
 bool connectWifiPortal() {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.persistent(true);
   WiFiManager wm;
   wm.setConfigPortalTimeout(180);
+  wm.setConnectTimeout(15);
   showStatus("Hara Setup", "Conecte WiFi");
   bool ok = wm.autoConnect("HARA_SETUP");
   if (ok) {
@@ -215,6 +248,10 @@ void maintainWifi() {
   WiFi.reconnect();
   showStatus("Reconectando", "WiFi");
 }
+
+// ============================================================
+// REGISTRO DO DISPOSITIVO
+// ============================================================
 
 bool registerDevice(bool rotateToken) {
   if (!isProvisioningSecretConfigured()) {
@@ -251,8 +288,8 @@ bool registerDevice(bool rotateToken) {
     Serial.printf("JSON invalido no registro: %s\n", error.c_str());
     return false;
   }
-  String newDeviceId = res["deviceId"] | "";
-  String newDeviceToken = res["deviceToken"] | "";
+  String newDeviceId = res["data"]["deviceId"] | res["deviceId"] | "";
+  String newDeviceToken = res["data"]["deviceToken"] | res["deviceToken"] | "";
   if (newDeviceId.length() == 0) {
     Serial.println("Registro sem deviceId na resposta.");
     return false;
@@ -285,6 +322,10 @@ void ensureDeviceRegistered() {
   registerDevice(true);
 }
 
+// ============================================================
+// HEARTBEAT
+// ============================================================
+
 bool sendHeartbeat() {
   if (!hasDeviceCredentials()) {
     return false;
@@ -303,7 +344,6 @@ bool sendHeartbeat() {
   serializeJson(doc, body);
   int code = http.POST(body);
   lastHttpCode = code;
-  String response = http.getString();
   http.end();
   if (code == 200) {
     apiReady = true;
@@ -318,6 +358,10 @@ bool sendHeartbeat() {
   }
   return false;
 }
+
+// ============================================================
+// SENSORES E ATUADORES
+// ============================================================
 
 int readSoilMoisture() {
   int raw = analogRead(SOIL_SENSOR_PIN);
@@ -447,6 +491,10 @@ void applyPumpSafety() {
   }
 }
 
+// ============================================================
+// CONFIGURACAO REMOTA
+// ============================================================
+
 bool syncConfigFromApi() {
   if (!hasDeviceCredentials()) {
     return false;
@@ -474,19 +522,35 @@ bool syncConfigFromApi() {
   }
   String response = http.getString();
   http.end();
-  DynamicJsonDocument doc(4096);
+
+  // Check the new standardized response format (success.data) or legacy
+  DynamicJsonDocument doc(6144);
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
     Serial.printf("JSON invalido no config: %s\n", error.c_str());
     return false;
   }
-  config.operationMode = doc["operationMode"] | "AUTO";
-  config.moistureLimit = doc["moistureThreshold"] | 35;
-  config.telemetryIntervalSeconds = doc["telemetryIntervalSeconds"] | 60;
-  config.pumpMode = doc["pumpMode"] | "AUTO";
-  config.maxSimultaneousZones = doc["maxSimultaneousZones"] | 0;
-  int newVersion = doc["configVersion"] | 0;
-  JsonArray zonesArray = doc["zones"].as<JsonArray>();
+
+  // Handle both new (success.data) and legacy response formats
+  JsonObject configData;
+  if (doc["success"] == true && !doc["data"].isNull()) {
+    configData = doc["data"].as<JsonObject>();
+  } else {
+    configData = doc.as<JsonObject>();
+  }
+
+  if (configData.isNull()) {
+    Serial.println("Config: dados nao encontrados na resposta");
+    return false;
+  }
+
+  config.operationMode = configData["operationMode"] | "AUTO";
+  config.moistureLimit = configData["moistureThreshold"] | 35;
+  config.telemetryIntervalSeconds = configData["telemetryIntervalSeconds"] | 60;
+  config.pumpMode = configData["pumpMode"] | "AUTO";
+  config.maxSimultaneousZones = configData["maxSimultaneousZones"] | 0;
+  int newVersion = configData["configVersion"] | 0;
+  JsonArray zonesArray = configData["zones"].as<JsonArray>();
   config.zoneCount = min((int)zonesArray.size(), MAX_ZONES);
   for (int i = 0; i < config.zoneCount; i++) {
     JsonObject z = zonesArray[i];
@@ -513,6 +577,10 @@ bool syncConfigFromApi() {
   showStatus("Config OK", String(newVersion) + " v" + String(config.zoneCount) + "z");
   return true;
 }
+
+// ============================================================
+// TELEMETRIA
+// ============================================================
 
 bool sendTelemetryToApi() {
   if (!hasDeviceCredentials()) {
@@ -562,6 +630,10 @@ bool sendTelemetryToApi() {
   return false;
 }
 
+// ============================================================
+// COMANDOS
+// ============================================================
+
 bool checkPendingCommands() {
   if (!hasDeviceCredentials()) {
     return false;
@@ -585,8 +657,14 @@ bool checkPendingCommands() {
   if (error) {
     return false;
   }
-  JsonArray commands = doc["commands"].as<JsonArray>();
-  if (commands.size() == 0) {
+  // Handle both new (success.data.commands) and legacy (commands) formats
+  JsonArray commands;
+  if (doc["success"] == true && !doc["data"]["commands"].isNull()) {
+    commands = doc["data"]["commands"].as<JsonArray>();
+  } else {
+    commands = doc["commands"].as<JsonArray>();
+  }
+  if (commands.isNull() || commands.size() == 0) {
     return true;
   }
   for (JsonObject cmd : commands) {
@@ -669,6 +747,10 @@ bool acknowledgeCommand(const char* commandId, bool success, const String& failR
   return code == 200;
 }
 
+// ============================================================
+// DISPLAY
+// ============================================================
+
 void updateDisplay() {
   String line1 = "Umi " + String(soilMoisture) + "% ";
   line1 += pumpOn ? "B:ON" : "B:OFF";
@@ -685,13 +767,23 @@ void updateDisplay() {
   showStatus(line1, line2);
 }
 
+// ============================================================
+// SETUP
+// ============================================================
+
 void setup() {
   Serial.begin(115200);
   lcd.begin(16, 2);
   showStatus("Hara Tech", "Inicializando");
+
+  // Configure watchdog
+  esp_task_wdt_init(WDT_TIMEOUT_SEC, true);
+  esp_task_wdt_add(NULL);
+
   pinMode(SOIL_SENSOR_PIN, INPUT);
   pinMode(PUMP_RELAY_PIN, OUTPUT);
   setPump(false);
+
   chipId = getChipId();
   loadCredentials();
   bootTimeMs = millis();
@@ -703,44 +795,57 @@ void setup() {
   }
 }
 
+// ============================================================
+// LOOP PRINCIPAL
+// ============================================================
+
 void loop() {
   unsigned long now = millis();
+
   maintainWifi();
   if (WiFi.status() == WL_CONNECTED) {
     ensureDeviceRegistered();
   }
+
   if (now - lastSensorReadAt >= SENSOR_INTERVAL_MS) {
     lastSensorReadAt = now;
     soilMoisture = readSoilMoisture();
     applyIrrigationControl();
     applyPumpSafety();
   }
+
   if (WiFi.status() == WL_CONNECTED &&
       hasDeviceCredentials() &&
       now - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
     lastHeartbeatAt = now;
     sendHeartbeat();
   }
+
   if (WiFi.status() == WL_CONNECTED &&
       hasDeviceCredentials() &&
       now - lastConfigSyncAt >= CONFIG_SYNC_INTERVAL_MS) {
     lastConfigSyncAt = now;
     syncConfigFromApi();
   }
+
   if (WiFi.status() == WL_CONNECTED &&
       hasDeviceCredentials() &&
       now - lastTelemetryAt >= (unsigned long)config.telemetryIntervalSeconds * 1000) {
     lastTelemetryAt = now;
     sendTelemetryToApi();
   }
+
   if (WiFi.status() == WL_CONNECTED &&
       hasDeviceCredentials() &&
       now - lastCommandPollAt >= COMMAND_INTERVAL_MS) {
     lastCommandPollAt = now;
     checkPendingCommands();
   }
+
   if (now - lastDisplayAt >= DISPLAY_INTERVAL_MS) {
     lastDisplayAt = now;
     updateDisplay();
   }
+
+  esp_task_wdt_reset();
 }

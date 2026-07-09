@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { AppError } from '../utils/AppError';
+import { getOwnedDevice } from '../utils/deviceOwnership';
 
 export interface TelemetryZoneInput {
   zoneIndex: number;
@@ -77,43 +78,34 @@ export async function processTelemetry(
     },
   });
 
-  await prisma.zone.updateMany({
-    where: {
-      deviceId: deviceInternalId,
-      index: {
-        in: input.zones?.map((z) => z.zoneIndex) ?? [],
-      },
-    },
-    data: {
-      lastTelemetryAt: new Date(),
-      appliedState: undefined,
-    },
-  });
-
   if (input.zones) {
+    const now = new Date();
     for (const zone of input.zones) {
+      const updateData: any = {
+        lastTelemetryAt: now,
+        lastAppliedAngle: zone.servoAngle ?? null,
+      };
       if (zone.appliedState) {
-        await prisma.zone.updateMany({
-          where: {
-            deviceId: deviceInternalId,
-            index: zone.zoneIndex,
-          },
-          data: {
-            appliedState: zone.appliedState as any,
-            lastAppliedAngle: zone.servoAngle ?? null,
-            lastTelemetryAt: new Date(),
-          },
-        });
+        updateData.appliedState = zone.appliedState;
       }
+      await prisma.zone.updateMany({
+        where: {
+          deviceId: deviceInternalId,
+          index: zone.zoneIndex,
+        },
+        data: updateData,
+      });
     }
   }
 
   return telemetry;
 }
 
-export async function getLatestTelemetry(deviceInternalId: string) {
+export async function getLatestTelemetry(userId: string, deviceId: string) {
+  const device = await getOwnedDevice(userId, deviceId);
+
   const telemetry = await prisma.deviceTelemetry.findFirst({
-    where: { deviceId: deviceInternalId },
+    where: { deviceId: device.id },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,

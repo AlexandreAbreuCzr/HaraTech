@@ -1,69 +1,111 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-
+import { Input } from '../components/ui/input'
+import { Button } from '../components/ui/button'
+import { Leaf } from 'lucide-react'
 
 export default function Register() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const { register } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
     try {
       await register(name, email, password)
       navigate('/')
     } catch (err: any) {
       setError(err.message || 'Erro ao cadastrar')
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center mb-8">
-          <img src="/logo.jpeg" alt="Hara" className="h-8 mb-4" />
-          <p className="text-zinc-500 text-sm">Irrigação inteligente</p>
+    <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-brand-600 to-brand-800 items-center justify-center p-12 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-white" />
+          <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-white" />
         </div>
-        <form onSubmit={handleSubmit} className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-white text-center">Criar Conta</h2>
-          {error && <p className="text-red-400 text-sm text-center bg-red-400/10 rounded-lg py-2">{error}</p>}
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1.5">Nome</label>
-            <input
-              type="text" value={name} onChange={e => setName(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-white outline-none focus:border-blue-500 transition-colors"
-              placeholder="Seu nome" required
-            />
+        <div className="relative text-center">
+          <div className="size-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-6">
+            <Leaf className="size-8 text-white" />
           </div>
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1.5">Email</label>
-            <input
-              type="email" value={email} onChange={e => setEmail(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-white outline-none focus:border-blue-500 transition-colors"
-              placeholder="seu@email.com" required
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1.5">Senha</label>
-            <input
-              type="password" value={password} onChange={e => setPassword(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-white outline-none focus:border-blue-500 transition-colors"
-              placeholder="••••••" required
-            />
-          </div>
-          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg py-2.5 transition-colors">
-            Cadastrar
-          </button>
-          <p className="text-sm text-zinc-600 text-center">
-            Já tem conta?{' '}
-            <Link to="/login" className="text-blue-400 hover:text-blue-300 transition-colors">Entrar</Link>
+          <h1 className="text-4xl font-bold text-white mb-3">Hara</h1>
+          <p className="text-lg text-brand-100 max-w-sm">
+            Comece a monitorar sua irrigação em minutos
           </p>
-        </form>
+        </div>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="w-full max-w-sm animate-slide-up">
+          <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
+            <div className="size-10 rounded-xl bg-brand-600 flex items-center justify-center">
+              <Leaf className="size-5 text-white" />
+            </div>
+            <span className="text-xl font-bold text-[var(--text-primary)]">Hara</span>
+          </div>
+
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Criar conta</h2>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Preencha os dados para se cadastrar</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900">
+                <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
+              </div>
+            )}
+
+            <Input
+              label="Nome"
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Seu nome"
+              required
+            />
+
+            <Input
+              label="Email"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+              required
+            />
+
+            <Input
+              label="Senha"
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••"
+              required
+            />
+
+            <Button type="submit" loading={loading} className="w-full">
+              Cadastrar
+            </Button>
+
+            <p className="text-sm text-center text-[var(--text-tertiary)]">
+              Já tem conta?{' '}
+              <Link to="/login" className="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 font-medium transition-colors">
+                Entrar
+              </Link>
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   )

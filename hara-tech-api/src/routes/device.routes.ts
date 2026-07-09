@@ -34,7 +34,10 @@ const router = Router();
 const esp32Limiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 60,
-  message: { error: 'Muitas requisicoes do dispositivo, aguarde.' },
+  message: {
+    success: false,
+    error: { code: 'RATE_LIMIT', message: 'Muitas requisicoes do dispositivo, aguarde.' },
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });

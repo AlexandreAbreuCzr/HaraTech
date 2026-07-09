@@ -1,28 +1,12 @@
+import type { CommandType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../utils/AppError';
+import { getOwnedDevice } from '../utils/deviceOwnership';
 
 export interface CreateCommandInput {
-  type: string;
+  type: CommandType;
   payload?: Record<string, unknown>;
-}
-
-async function getOwnedDevice(userId: string, deviceId: string) {
-  const normalizedDeviceId = deviceId.trim().toUpperCase();
-
-  const device = await prisma.device.findFirst({
-    where: {
-      deviceId: normalizedDeviceId,
-      ownerId: userId,
-    },
-    select: { id: true, deviceId: true },
-  });
-
-  if (!device) {
-    throw new AppError('Dispositivo nao encontrado para este usuario', 404);
-  }
-
-  return device;
 }
 
 export async function createCommand(
@@ -34,8 +18,8 @@ export async function createCommand(
 
   const command = await prisma.command.create({
     data: {
-      type: input.type as any,
-      payload: (input.payload as Prisma.InputJsonValue) ?? undefined,
+      type: input.type,
+      payload: input.payload as Prisma.InputJsonValue ?? Prisma.JsonNull,
       deviceId: device.id,
     },
     select: {

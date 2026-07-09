@@ -19,7 +19,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEVICE_PROVISIONING_SECRET
-        value: troque-por-um-segredo-forte-com-pelo-menos-32-caracteres
+        generateValue: true
       - key: DEVICE_ONLINE_WINDOW_SECONDS
         value: 120
 

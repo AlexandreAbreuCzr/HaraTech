@@ -8,6 +8,7 @@ import {
   acknowledgeCommand,
   getDeviceCommands,
 } from '../services/command.service';
+import { sendSuccess } from '../utils/response';
 
 const createCommandSchema = z.object({
   type: z.enum([
@@ -45,7 +46,7 @@ export async function createCommandHandler(
     const input = createCommandSchema.parse(req.body);
     const command = await createCommand(req.user!.userId, deviceId, input);
 
-    res.status(201).json(command);
+    sendSuccess(res, command, 'Comando criado com sucesso', 201);
   } catch (err) {
     next(err);
   }
@@ -60,7 +61,7 @@ export async function getDeviceCommandsHandler(
     const { deviceId } = deviceIdParamSchema.parse(req.params);
     const commands = await getDeviceCommands(req.user!.userId, deviceId);
 
-    res.json({ commands, total: commands.length });
+    sendSuccess(res, { commands, total: commands.length });
   } catch (err) {
     next(err);
   }
@@ -74,7 +75,7 @@ export async function getPendingCommandsHandler(
   try {
     const commands = await getPendingCommands(req.device!.id);
 
-    res.json({ commands, total: commands.length });
+    sendSuccess(res, { commands, total: commands.length });
   } catch (err) {
     next(err);
   }
@@ -98,7 +99,7 @@ export async function acknowledgeCommandHandler(
       input.failReason
     );
 
-    res.json(result);
+    sendSuccess(res, result, 'Comando confirmado com sucesso');
   } catch (err) {
     next(err);
   }

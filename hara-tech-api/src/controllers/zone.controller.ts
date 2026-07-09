@@ -7,6 +7,7 @@ import {
   updateZone,
   deleteZone,
 } from '../services/zone.service';
+import { sendSuccess, sendSuccessNoContent } from '../utils/response';
 
 const deviceIdParamSchema = z.object({
   deviceId: z.string().trim().transform((value) => value.toUpperCase()),
@@ -42,7 +43,7 @@ export async function createZoneHandler(
     const input = createZoneSchema.parse(req.body);
     const zone = await createZone(req.user!.userId, deviceId, input);
 
-    res.status(201).json(zone);
+    sendSuccess(res, zone, 'Area criada com sucesso', 201);
   } catch (err) {
     next(err);
   }
@@ -57,7 +58,7 @@ export async function listZonesHandler(
     const { deviceId } = deviceIdParamSchema.parse(req.params);
     const zones = await listZones(req.user!.userId, deviceId);
 
-    res.json({ zones, total: zones.length });
+    sendSuccess(res, { zones, total: zones.length });
   } catch (err) {
     next(err);
   }
@@ -73,7 +74,7 @@ export async function updateZoneHandler(
     const input = updateZoneSchema.parse(req.body);
     const zone = await updateZone(req.user!.userId, deviceId, zoneId, input);
 
-    res.json(zone);
+    sendSuccess(res, zone, 'Area atualizada com sucesso');
   } catch (err) {
     next(err);
   }
@@ -88,7 +89,7 @@ export async function deleteZoneHandler(
     const { deviceId, zoneId } = zoneIdParamSchema.parse(req.params);
     await deleteZone(req.user!.userId, deviceId, zoneId);
 
-    res.status(204).send();
+    sendSuccessNoContent(res);
   } catch (err) {
     next(err);
   }

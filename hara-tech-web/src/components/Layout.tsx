@@ -1,9 +1,19 @@
 import { type ReactNode, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { useTheme } from '../lib/theme'
 import {
-  LayoutDashboard, HardDrive, Sprout, CalendarClock,
-  History, LogOut, Menu, X
+  LayoutDashboard,
+  HardDrive,
+  Sprout,
+  CalendarClock,
+  History,
+  LogOut,
+  Menu,
+  X,
+  Sun,
+  Moon,
+  ChevronRight,
 } from 'lucide-react'
 
 const nav = [
@@ -14,55 +24,131 @@ const nav = [
   { to: '/historico', label: 'Histórico', icon: History },
 ]
 
+const pageTitles: Record<string, string> = {
+  '/': 'Dashboard',
+  '/dispositivos': 'Dispositivos',
+  '/culturas': 'Culturas',
+  '/programacao': 'Programação',
+  '/historico': 'Histórico',
+}
+
 export default function Layout({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout } = useAuth()
+  const { theme, toggle } = useTheme()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const handleLogout = () => { logout(); navigate('/login') }
 
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/'
+    return location.pathname.startsWith(path)
+  }
+
+  const currentPage = Object.entries(pageTitles).find(([path]) =>
+    location.pathname.startsWith(path)
+  )?.[1] || ''
+
   return (
-    <div className="min-h-screen flex bg-black">
-      <aside className={`fixed inset-y-0 left-0 z-50 w-60 bg-zinc-950 border-r border-zinc-800 transform transition-transform ${open ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-auto`}>
-        <div className="h-14 flex items-center gap-2 px-5 border-b border-zinc-800">
-          <img src="/logo.jpeg" alt="Hara" className="h-6" />
+    <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      {/* Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm lg:hidden animate-fade-in"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[var(--bg-secondary)] border-r border-[var(--border-primary)] transform transition-transform duration-200 ease-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0 lg:static lg:inset-auto`}
+      >
+        <div className="flex items-center gap-3 h-16 px-6 border-b border-[var(--border-primary)]">
+          <div className="size-8 rounded-xl bg-brand-600 flex items-center justify-center text-white text-sm font-bold">
+            H
+          </div>
+          <span className="font-semibold text-[var(--text-primary)]">Hara</span>
         </div>
+
         <nav className="p-3 space-y-1">
           {nav.map(item => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === '/'}
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                  isActive ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
-                }`
-              }
+              onClick={() => setSidebarOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150
+                ${isActive(item.to)
+                  ? 'bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                }`}
             >
               <item.icon className="size-4" />
               {item.label}
             </NavLink>
           ))}
         </nav>
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-zinc-800">
-          <div className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-500">
-            <span className="truncate flex-1">{user?.email}</span>
-            <button onClick={handleLogout} className="text-zinc-600 hover:text-red-400 transition-colors">
+
+        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-[var(--border-primary)]">
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl">
+            <div className="size-8 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center text-sm font-medium text-brand-700 dark:text-brand-300">
+              {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || '?'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                {user?.name || 'Usuário'}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)] truncate">
+                {user?.email}
+              </p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+              title="Sair"
+            >
               <LogOut className="size-4" />
             </button>
           </div>
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0">
-        <header className="h-14 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-40 flex items-center px-4 lg:hidden">
-          <button onClick={() => setOpen(!open)} className="text-zinc-400 hover:text-white mr-3">
-            {open ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
-          <img src="/logo.jpeg" alt="Hara" className="h-5" />
+      {/* Main content */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Top bar */}
+        <header className="h-16 border-b border-[var(--border-primary)] bg-[var(--bg-secondary)]/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-4 lg:px-8">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="lg:hidden p-2 -ml-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+            >
+              {sidebarOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+            </button>
+            <nav className="hidden sm:flex items-center gap-1.5 text-sm">
+              <span className="text-[var(--text-tertiary)]">Hara</span>
+              <ChevronRight className="size-3.5 text-[var(--text-tertiary)]" />
+              <span className="text-[var(--text-primary)] font-medium">{currentPage}</span>
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggle}
+              className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+              title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+            >
+              {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            </button>
+          </div>
         </header>
-        <main className="p-4 md:p-6 lg:p-8">{children}</main>
+
+        {/* Page content */}
+        <main className="flex-1 p-4 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
+          {children}
+        </main>
       </div>
     </div>
   )

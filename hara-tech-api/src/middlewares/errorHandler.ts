@@ -10,25 +10,39 @@ export function errorHandler(
 ): void {
   if (err instanceof ZodError) {
     res.status(422).json({
-      error: 'Dados invalidos',
-      issues: err.errors.map((e) => ({
-        field: e.path.join('.'),
-        message: e.message,
-      })),
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Dados invalidos',
+        issues: err.errors.map((e) => ({
+          field: e.path.join('.'),
+          message: e.message,
+        })),
+      },
     });
     return;
   }
 
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({ error: err.message });
+    res.status(err.statusCode).json({
+      success: false,
+      error: {
+        code: 'APP_ERROR',
+        message: err.message,
+      },
+    });
     return;
   }
 
   console.error('[UNHANDLED ERROR]', err);
   res.status(500).json({
-    error:
-      process.env.NODE_ENV === 'production'
-        ? 'Erro interno do servidor'
-        : err.message,
+    success: false,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message:
+        process.env.NODE_ENV === 'production'
+          ? 'Erro interno do servidor'
+          : err.message,
+    },
   });
 }
