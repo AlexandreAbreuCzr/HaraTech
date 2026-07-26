@@ -108,31 +108,31 @@ export default function Dashboard() {
         {/* Stats grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            icon={<HardDrive className="size-5 text-brand-600 dark:text-brand-400" />}
+            icon={<HardDrive className="size-5 text-[var(--text-primary)]" />}
             label="Dispositivos"
             value={devices.length}
             sub={online > 0 ? `${online} online` : 'Nenhum online'}
-            color="bg-brand-50 dark:bg-brand-950"
+            color="bg-[var(--bg-tertiary)]"
           />
           <StatCard
-            icon={<Wifi className="size-5 text-emerald-600 dark:text-emerald-400" />}
+            icon={<Wifi className="size-5 text-[var(--accent-leaf)]" />}
             label="Online"
             value={online}
             sub={`${devices.length - online} offline`}
-            color="bg-emerald-50 dark:bg-emerald-950"
+            color="bg-[var(--accent-leaf-soft)]"
           />
           <StatCard
-            icon={<Sprout className="size-5 text-violet-600 dark:text-violet-400" />}
+            icon={<Sprout className="size-5 text-[var(--accent-leaf)]" />}
             label="Culturas"
             value={culturas.length}
-            color="bg-violet-50 dark:bg-violet-950"
+            color="bg-[var(--accent-leaf-soft)]"
           />
           <StatCard
-            icon={<CalendarClock className="size-5 text-amber-600 dark:text-amber-400" />}
+            icon={<CalendarClock className="size-5 text-[var(--accent-sun)]" />}
             label="Planos Ativos"
             value={ativas}
             sub={programacoes.length > 0 ? `${programacoes.length} programações` : undefined}
-            color="bg-amber-50 dark:bg-amber-950"
+            color="bg-[var(--accent-sun-soft)]"
           />
         </div>
 
@@ -172,7 +172,7 @@ export default function Dashboard() {
                       style={{ animationDelay: `${idx * 50}ms` }}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`size-2.5 rounded-full ${d.isOnline ? 'bg-emerald-500 shadow-sm shadow-emerald-500/30' : 'bg-[var(--text-tertiary)]'}`} />
+                      <div className={`size-2.5 rounded-full ${d.isOnline ? 'bg-[var(--accent-leaf)] shadow-sm shadow-brand-500/30' : 'bg-[var(--text-tertiary)]'}`} />
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-[var(--text-primary)] font-mono">{d.deviceId}</span>
@@ -277,7 +277,7 @@ export default function Dashboard() {
                   <div key={d.id} className="p-4 rounded-xl bg-[var(--bg-tertiary)]/40">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-medium text-[var(--text-secondary)]">{d.deviceId}</span>
-                      <div className={`size-2 rounded-full ${d.isOnline ? 'bg-emerald-500' : 'bg-[var(--text-tertiary)]'}`} />
+                      <div className={`size-2 rounded-full ${d.isOnline ? 'bg-[var(--accent-leaf)]' : 'bg-[var(--text-tertiary)]'}`} />
                     </div>
                     <div className="flex items-end gap-3">
                       <div className="flex-1">

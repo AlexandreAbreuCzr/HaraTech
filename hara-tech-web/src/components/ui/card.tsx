@@ -8,7 +8,7 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 export function Card({ children, padding = true, className = '', ...props }: CardProps) {
   return (
     <div
-      className={`bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl shadow-sm ${padding ? 'p-5' : ''} ${className}`}
+      className={`brand-card bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-sm ${padding ? 'p-5' : ''} ${className}`}
       {...props}
     >
       {children}

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Droplets, Sprout, SunMedium } from 'lucide-react'
 import { useAuth } from '../lib/auth-context'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
@@ -28,36 +29,42 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-primary)' }}>
-      {/* Left panel - brand */}
-      <div className="hidden lg:flex w-1/2 bg-[var(--text-primary)] items-center justify-center p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-white" />
-          <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-white" />
+    <div className="brand-shell flex min-h-screen">
+      <div className="brand-hero relative hidden w-1/2 items-center justify-center overflow-hidden p-12 lg:flex">
+        <div className="brand-grid absolute inset-0 opacity-50" />
+        <div className="absolute -right-24 -top-24 size-96 rounded-full border border-white/10" />
+        <div className="absolute -bottom-24 -left-24 size-80 rounded-full border border-white/10" />
+        <div className="absolute right-14 top-14 flex items-center gap-2 text-xs font-semibold tracking-[0.16em] text-white/55 uppercase">
+          <span className="size-2 rounded-full bg-[var(--accent-sun)]" /> Energia inteligente
         </div>
         <div className="relative text-center">
-          <BrandLogo className="w-72 mx-auto mb-8" />
-          <p className="text-lg text-stone-300 max-w-sm">
-            Irrigação inteligente para um futuro mais sustentável
+          <BrandLogo className="mx-auto mb-8 w-72" />
+          <p className="mx-auto max-w-sm text-lg text-white/70">
+            Irrigação inteligente para um futuro mais sustentável.
           </p>
+          <div className="mt-8 flex justify-center gap-2">
+            <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/80"><SunMedium className="size-3.5 text-[var(--accent-sun)]" />Solar</span>
+            <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/80"><Droplets className="size-3.5 text-[var(--accent-water)]" />Água</span>
+            <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/80"><Sprout className="size-3.5 text-[var(--accent-leaf)]" />Cultivo</span>
+          </div>
         </div>
       </div>
 
-      {/* Right panel - form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex flex-1 items-center justify-center p-6 sm:p-8">
         <div className="w-full max-w-sm animate-slide-up">
-          <div className="lg:hidden flex justify-center mb-8">
+          <div className="mb-8 flex justify-center lg:hidden">
             <BrandLogo compact />
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Bem-vindo de volta</h2>
-            <p className="text-sm text-[var(--text-secondary)] mt-1">Entre com sua conta para continuar</p>
+            <p className="brand-overline mb-2">Acesso à plataforma</p>
+            <h2 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Bem-vindo de volta</h2>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">Entre com sua conta para continuar</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
                 <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
               </div>
             )}
@@ -76,7 +83,7 @@ export default function Login() {
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="••••••"
+              placeholder="••••••••"
               required
             />
 
@@ -84,9 +91,9 @@ export default function Login() {
               Entrar
             </Button>
 
-            <p className="text-sm text-center text-[var(--text-tertiary)]">
+            <p className="text-center text-sm text-[var(--text-tertiary)]">
               Ainda não tem conta?{' '}
-              <Link to="/register" className="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 font-medium transition-colors">
+              <Link to="/register" className="font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                 Cadastrar
               </Link>
             </p>

@@ -1,55 +1,63 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-50: #f2f7ee;
-  --color-brand-100: #e2edd9;
-  --color-brand-200: #c5dcb8;
-  --color-brand-300: #9ec692;
-  --color-brand-400: #78ad6c;
-  --color-brand-500: #598f57;
-  --color-brand-600: #3f7648;
-  --color-brand-700: #315e3a;
-  --color-brand-800: #294c31;
-  --color-brand-900: #1e3927;
-  --color-brand-950: #0f2118;
+  --color-brand-50: #eef7ed;
+  --color-brand-100: #ddedd9;
+  --color-brand-200: #c0dfba;
+  --color-brand-300: #99c995;
+  --color-brand-400: #72ad71;
+  --color-brand-500: #468a4f;
+  --color-brand-600: #246a3b;
+  --color-brand-700: #1f5632;
+  --color-brand-800: #1c452a;
+  --color-brand-900: #173724;
+  --color-brand-950: #0b2215;
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --bg-primary: #f7f7f2;
-  --bg-secondary: #fffefb;
-  --bg-tertiary: #edf0e7;
+  --ink: #121611;
+  --bg-primary: #f7f8f4;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #edf1e9;
   --bg-elevated: #ffffff;
-  --border-primary: #dce3d4;
-  --border-secondary: #edf0e7;
-  --text-primary: #17211a;
-  --text-secondary: #4b5a4d;
-  --text-tertiary: #778477;
-  --text-inverse: #fffefb;
-  --accent-water: #167a97;
-  --accent-sun: #d59b27;
-  --accent-leaf: #3f7648;
-  --shadow-sm: 0 1px 2px 0 rgb(23 33 26 / 0.05);
-  --shadow-md: 0 6px 14px -6px rgb(23 33 26 / 0.12), 0 2px 4px -3px rgb(23 33 26 / 0.06);
-  --shadow-lg: 0 16px 30px -16px rgb(23 33 26 / 0.18), 0 8px 12px -8px rgb(23 33 26 / 0.08);
-  --shadow-xl: 0 24px 42px -20px rgb(23 33 26 / 0.22), 0 10px 18px -12px rgb(23 33 26 / 0.1);
+  --border-primary: #d9ded5;
+  --border-secondary: #e9ece5;
+  --text-primary: #161b16;
+  --text-secondary: #4f5b50;
+  --text-tertiary: #788077;
+  --text-inverse: #ffffff;
+  --accent-water: #167a9b;
+  --accent-water-soft: #e3f3f7;
+  --accent-sun: #d99d24;
+  --accent-sun-soft: #fff4d8;
+  --accent-leaf: #287743;
+  --accent-leaf-soft: #e7f4e9;
+  --shadow-sm: 0 1px 2px 0 rgb(18 22 17 / 0.05);
+  --shadow-md: 0 10px 24px -14px rgb(18 22 17 / 0.16), 0 2px 5px -3px rgb(18 22 17 / 0.06);
+  --shadow-lg: 0 22px 38px -22px rgb(18 22 17 / 0.22), 0 8px 14px -10px rgb(18 22 17 / 0.08);
+  --shadow-xl: 0 28px 52px -26px rgb(18 22 17 / 0.26), 0 12px 20px -14px rgb(18 22 17 / 0.1);
 }
 
 .dark {
-  --bg-primary: #101914;
-  --bg-secondary: #17231b;
-  --bg-tertiary: #223126;
-  --bg-elevated: #1c2a20;
-  --border-primary: #304034;
-  --border-secondary: #223126;
-  --text-primary: #f4f6ef;
-  --text-secondary: #bdc9bc;
-  --text-tertiary: #7d907e;
-  --text-inverse: #17211a;
-  --accent-water: #56b7cf;
-  --accent-sun: #e8bd60;
-  --accent-leaf: #8fbd84;
+  --ink: #090c09;
+  --bg-primary: #111511;
+  --bg-secondary: #181d19;
+  --bg-tertiary: #222922;
+  --bg-elevated: #1d231e;
+  --border-primary: #333b34;
+  --border-secondary: #252d26;
+  --text-primary: #f4f6f0;
+  --text-secondary: #c0c8be;
+  --text-tertiary: #8c978b;
+  --text-inverse: #151a15;
+  --accent-water: #65c6de;
+  --accent-water-soft: #153841;
+  --accent-sun: #f0c966;
+  --accent-sun-soft: #3d3014;
+  --accent-leaf: #93ca93;
+  --accent-leaf-soft: #183c24;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.32);
   --shadow-md: 0 6px 14px -6px rgb(0 0 0 / 0.42), 0 2px 4px -3px rgb(0 0 0 / 0.3);
   --shadow-lg: 0 16px 30px -16px rgb(0 0 0 / 0.55), 0 8px 12px -8px rgb(0 0 0 / 0.35);
@@ -85,7 +93,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent-water);
+  outline: 2px solid var(--accent-leaf);
   outline-offset: 2px;
 }
 
@@ -129,7 +137,58 @@ body {
 
 .brand-paper {
   background: #ffffff;
-  box-shadow: 0 8px 24px -14px rgb(23 33 26 / 0.38);
+  border: 1px solid rgb(18 22 17 / 0.1);
+  box-shadow: 0 12px 28px -18px rgb(18 22 17 / 0.42);
+}
+
+.brand-shell {
+  background:
+    radial-gradient(circle at 100% 0%, rgb(40 119 67 / 0.09), transparent 26rem),
+    radial-gradient(circle at 22% 100%, rgb(22 122 155 / 0.06), transparent 30rem),
+    var(--bg-primary);
+}
+
+.brand-hero {
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.08), transparent 34%),
+    radial-gradient(circle at 88% 12%, rgb(217 157 36 / 0.25), transparent 16rem),
+    radial-gradient(circle at 8% 88%, rgb(22 122 155 / 0.24), transparent 18rem),
+    var(--ink);
+}
+
+.brand-grid {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.brand-overline {
+  color: var(--accent-leaf);
+  font-size: 0.69rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.brand-rail {
+  box-shadow: 14px 0 34px -26px rgb(18 22 17 / 0.75);
+}
+
+.brand-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.brand-card::before {
+  position: absolute;
+  top: 0;
+  left: 1.25rem;
+  width: 2.75rem;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: var(--accent-leaf);
+  content: '';
 }
 
 @media (prefers-reduced-motion: reduce) {
