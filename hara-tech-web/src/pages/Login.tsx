@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../lib/auth'
+import { useAuth } from '../lib/auth-context'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
-import { Leaf } from 'lucide-react'
+import { BrandLogo } from '../components/BrandLogo'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -30,17 +30,14 @@ export default function Login() {
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {/* Left panel - brand */}
-      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-brand-600 to-brand-800 items-center justify-center p-12 relative overflow-hidden">
+      <div className="hidden lg:flex w-1/2 bg-[var(--text-primary)] items-center justify-center p-12 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-white" />
           <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-white" />
         </div>
         <div className="relative text-center">
-          <div className="size-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-6">
-            <Leaf className="size-8 text-white" />
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-3">Hara</h1>
-          <p className="text-lg text-brand-100 max-w-sm">
+          <BrandLogo className="w-72 mx-auto mb-8" />
+          <p className="text-lg text-stone-300 max-w-sm">
             Irrigação inteligente para um futuro mais sustentável
           </p>
         </div>
@@ -49,11 +46,8 @@ export default function Login() {
       {/* Right panel - form */}
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-sm animate-slide-up">
-          <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <div className="size-10 rounded-xl bg-brand-600 flex items-center justify-center">
-              <Leaf className="size-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-[var(--text-primary)]">Hara</span>
+          <div className="lg:hidden flex justify-center mb-8">
+            <BrandLogo compact />
           </div>
 
           <div className="mb-8">

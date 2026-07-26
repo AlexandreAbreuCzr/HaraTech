@@ -17,7 +17,10 @@ import {
   updateZoneHandler,
   deleteZoneHandler,
 } from '../controllers/zone.controller';
-import { getDeviceConfigHandler } from '../controllers/config.controller';
+import {
+  getDeviceConfigHandler,
+  getUserDeviceConfigHandler,
+} from '../controllers/config.controller';
 import {
   telemetryHandler,
   getLatestTelemetryHandler,
@@ -28,6 +31,10 @@ import {
   createCommandHandler,
   getDeviceCommandsHandler,
 } from '../controllers/command.controller';
+import {
+  getDeviceIrrigationLogsHandler,
+  getIrrigationLogsHandler,
+} from '../controllers/irrigation.controller';
 
 const router = Router();
 
@@ -83,11 +90,14 @@ router.use(authenticate);
 
 router.post('/link', linkDeviceHandler);
 router.get('/', getUserDevicesHandler);
+router.get('/irrigation-logs', getIrrigationLogsHandler);
 router.post('/:deviceId/zones', createZoneHandler);
 router.get('/:deviceId/zones', listZonesHandler);
 router.patch('/:deviceId/zones/:zoneId', updateZoneHandler);
 router.delete('/:deviceId/zones/:zoneId', deleteZoneHandler);
+router.get('/:deviceId/configuration', getUserDeviceConfigHandler);
 router.get('/:deviceId/telemetry/latest', getLatestTelemetryHandler);
+router.get('/:deviceId/irrigation-logs', getDeviceIrrigationLogsHandler);
 router.post('/:deviceId/commands', createCommandHandler);
 router.get('/:deviceId/commands', getDeviceCommandsHandler);
 

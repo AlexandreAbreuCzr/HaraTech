@@ -86,6 +86,12 @@ export async function registerDevice(
   });
 
   if (existing) {
+    await prisma.deviceConfig.upsert({
+      where: { deviceId: existing.id },
+      update: {},
+      create: { deviceId: existing.id },
+    });
+
     if (options.rotateToken || !existing.deviceTokenHash) {
       const { token, tokenHash } = buildDeviceToken();
 
@@ -112,6 +118,7 @@ export async function registerDevice(
       chipId: normalizedChipId,
       deviceId,
       deviceTokenHash: tokenHash,
+      config: { create: {} },
     },
     select: { deviceId: true },
   });
@@ -170,13 +177,18 @@ export async function updateHeartbeat(
   deviceInternalId: string,
   input: HeartbeatInput
 ) {
+  const data: {
+    lastSeen: Date;
+    lastIp?: string;
+    lastRssi?: number;
+  } = { lastSeen: new Date() };
+
+  if (input.ip !== undefined) data.lastIp = input.ip;
+  if (input.rssi !== undefined) data.lastRssi = input.rssi;
+
   const updatedDevice = await prisma.device.update({
     where: { id: deviceInternalId },
-    data: {
-      lastSeen: new Date(),
-      lastIp: input.ip,
-      lastRssi: input.rssi,
-    },
+    data,
     select: {
       deviceId: true,
       lastSeen: true,

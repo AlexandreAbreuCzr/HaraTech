@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import Layout from '../components/Layout'
 import { Card, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
@@ -30,15 +30,19 @@ export default function Devices() {
   const [linking, setLinking] = useState(false)
   const navigate = useNavigate()
 
-  const fetch = () => {
+  const fetchDevices = useCallback(async () => {
     setLoading(true)
-    api.dispositivos.listar()
-      .then(d => setDevices(d.devices))
-      .catch(() => setDevices([]))
-      .finally(() => setLoading(false))
-  }
+    try {
+      const response = await api.dispositivos.listar()
+      setDevices(response.devices)
+    } catch (err) {
+      setLinkError(err instanceof ApiError ? err.message : 'Não foi possível carregar os dispositivos.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  useEffect(() => { fetch() }, [])
+  useEffect(() => { void fetchDevices() }, [fetchDevices])
 
   const handleLink = async () => {
     setLinkError('')
@@ -47,9 +51,9 @@ export default function Devices() {
     try {
       await api.dispositivos.vincular(linkInput.trim().toUpperCase())
       setLinkInput('')
-      fetch()
-    } catch (err: any) {
-      setLinkError(err.message || 'Erro ao vincular')
+      await fetchDevices()
+    } catch (err) {
+      setLinkError(err instanceof ApiError ? err.message : 'Erro ao vincular o dispositivo.')
     } finally {
       setLinking(false)
     }

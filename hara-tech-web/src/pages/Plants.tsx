@@ -27,6 +27,8 @@ export default function Plants() {
   }
 
   const remove = (id: string) => {
+    const cultura = culturas.find((item) => item.id === id)
+    if (!window.confirm(`Remover a cultura “${cultura?.nome ?? ''}”?`)) return
     culturasStore.remove(id)
     setCulturas(culturasStore.list())
   }
@@ -83,12 +85,16 @@ export default function Plants() {
                   <button
                     onClick={() => openEdit(c)}
                     className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
+                    aria-label={`Editar ${c.nome}`}
+                    title="Editar cultura"
                   >
                     <Pencil className="size-3.5" />
                   </button>
                   <button
                     onClick={() => remove(c.id)}
                     className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer"
+                    aria-label={`Remover ${c.nome}`}
+                    title="Remover cultura"
                   >
                     <Trash2 className="size-3.5" />
                   </button>
@@ -137,18 +143,31 @@ function CulturaForm({ cultura, onSave }: { cultura: Cultura | null; onSave: (c:
   const [max, setMax] = useState(cultura?.umidadeIdealMax?.toString() || '')
   const [icone, setIcone] = useState(cultura?.icone || icones[0])
   const [cor, setCor] = useState(cultura?.cor || cores[0])
+  const [error, setError] = useState('')
 
   const handle = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!nome.trim() || !agua || !intervalo) return
+    const water = Number(agua)
+    const interval = Number(intervalo)
+    const minimum = min === '' ? 0 : Number(min)
+    const maximum = max === '' ? 100 : Number(max)
+    if (!nome.trim() || !Number.isFinite(water) || water <= 0 || !Number.isFinite(interval) || interval <= 0) {
+      setError('Informe uma quantidade de água e um intervalo válidos.')
+      return
+    }
+    if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum < 0 || maximum > 100 || minimum > maximum) {
+      setError('A umidade mínima deve ser menor ou igual à máxima, entre 0% e 100%.')
+      return
+    }
+    setError('')
     onSave({
       id: cultura?.id || crypto.randomUUID(),
       nome: nome.trim(),
       descricao: desc.trim(),
-      aguaPorRegaMl: Number(agua),
-      intervaloRegaHoras: Number(intervalo),
-      umidadeIdealMin: Number(min) || 0,
-      umidadeIdealMax: Number(max) || 100,
+      aguaPorRegaMl: water,
+      intervaloRegaHoras: interval,
+      umidadeIdealMin: minimum,
+      umidadeIdealMax: maximum,
       icone, cor,
     })
   }
@@ -193,6 +212,7 @@ function CulturaForm({ cultura, onSave }: { cultura: Cultura | null; onSave: (c:
       <div className="flex gap-2 pt-2">
         <Button type="submit" className="flex-1">{cultura ? 'Salvar' : 'Adicionar'}</Button>
       </div>
+      {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     </form>
   )
 }

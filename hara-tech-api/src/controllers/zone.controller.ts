@@ -17,10 +17,27 @@ const zoneIdParamSchema = deviceIdParamSchema.extend({
   zoneId: z.string().uuid('zoneId invalido'),
 });
 
+const actuatorSchema = z.object({
+  channel: z.number().int().min(0).max(39),
+  openAngle: z.number().int().min(0).max(180).optional(),
+  closedAngle: z.number().int().min(0).max(180).optional(),
+  minPulseUs: z.number().int().min(400).max(3000).optional(),
+  maxPulseUs: z.number().int().min(400).max(3000).optional(),
+  inverted: z.boolean().optional(),
+}).refine(
+  (actuator) =>
+    actuator.minPulseUs === undefined ||
+    actuator.maxPulseUs === undefined ||
+    actuator.minPulseUs < actuator.maxPulseUs,
+  { message: 'minPulseUs deve ser menor que maxPulseUs' }
+);
+
 const createZoneSchema = z.object({
   name: z.string().trim().min(2, 'Nome deve ter ao menos 2 caracteres').max(80),
   index: z.number().int().min(0).max(255).optional(),
   isActive: z.boolean().optional(),
+  enabled: z.boolean().optional(),
+  actuator: actuatorSchema.optional(),
 });
 
 const updateZoneSchema = z
@@ -28,6 +45,8 @@ const updateZoneSchema = z
     name: z.string().trim().min(2).max(80).optional(),
     index: z.number().int().min(0).max(255).optional(),
     isActive: z.boolean().optional(),
+    enabled: z.boolean().optional(),
+    actuator: actuatorSchema.nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Informe ao menos um campo para atualizar',

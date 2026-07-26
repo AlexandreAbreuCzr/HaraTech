@@ -2,18 +2,59 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../utils/AppError';
 import { getOwnedDevice } from '../utils/deviceOwnership';
+import { bumpDeviceConfigVersion } from './config.service';
+
+export interface ZoneActuatorInput {
+  channel: number;
+  openAngle?: number;
+  closedAngle?: number;
+  minPulseUs?: number;
+  maxPulseUs?: number;
+  inverted?: boolean;
+}
 
 export interface CreateZoneInput {
   name: string;
   index?: number;
   isActive?: boolean;
+  enabled?: boolean;
+  actuator?: ZoneActuatorInput;
 }
 
 export interface UpdateZoneInput {
   name?: string;
   index?: number;
   isActive?: boolean;
+  enabled?: boolean;
+  actuator?: ZoneActuatorInput | null;
 }
+
+const zoneSelect = {
+  id: true,
+  name: true,
+  index: true,
+  isActive: true,
+  enabled: true,
+  desiredState: true,
+  appliedState: true,
+  confirmedState: true,
+  lastAppliedAngle: true,
+  lastTelemetryAt: true,
+  createdAt: true,
+  updatedAt: true,
+  actuator: {
+    select: {
+      type: true,
+      driver: true,
+      channel: true,
+      openAngle: true,
+      closedAngle: true,
+      minPulseUs: true,
+      maxPulseUs: true,
+      inverted: true,
+    },
+  },
+} satisfies Prisma.ZoneSelect;
 
 async function getNextZoneIndex(deviceInternalId: string) {
   const result = await prisma.zone.aggregate({
@@ -43,18 +84,39 @@ async function ensureZoneIndexAvailable(
   }
 }
 
-function isZoneIndexConflict(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === 'P2002' &&
-    Array.isArray(error.meta?.target) &&
-    error.meta.target.includes('deviceId') &&
-    error.meta.target.includes('index')
-  );
+function uniqueConstraintTarget(error: unknown): string {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return '';
+  }
+
+  const target = error.meta?.target;
+  return Array.isArray(target) ? target.join(',') : String(target ?? '');
 }
 
-function zoneIndexConflictError(): AppError {
-  return new AppError('Ja existe uma area com esse indice neste dispositivo', 409);
+function isZoneIndexConflict(error: unknown): boolean {
+  const target = uniqueConstraintTarget(error);
+  return target.includes('deviceId') && target.includes('index');
+}
+
+function isActuatorChannelConflict(error: unknown): boolean {
+  const target = uniqueConstraintTarget(error);
+  return target.includes('driver') && target.includes('channel');
+}
+
+function rethrowZoneConstraint(error: unknown): never {
+  if (isZoneIndexConflict(error)) {
+    throw new AppError('Ja existe uma area com esse indice neste dispositivo', 409);
+  }
+
+  if (isActuatorChannelConflict(error)) {
+    throw new AppError('Este GPIO ja esta configurado em outra area', 409);
+  }
+
+  throw error;
+}
+
+function zoneStateFromInput(isActive?: boolean) {
+  return isActive ? 'OPEN' : 'CLOSED';
 }
 
 async function createZoneWithIndex(
@@ -62,20 +124,35 @@ async function createZoneWithIndex(
   input: CreateZoneInput,
   index: number
 ) {
-  return prisma.zone.create({
-    data: {
-      name: input.name,
-      index,
-      isActive: input.isActive ?? false,
-      deviceId: deviceInternalId,
-    },
-    select: {
-      id: true,
-      name: true,
-      index: true,
-      isActive: true,
-      createdAt: true,
-    },
+  return prisma.$transaction(async (tx) => {
+    const zone = await tx.zone.create({
+      data: {
+        name: input.name,
+        index,
+        isActive: input.isActive ?? false,
+        desiredState: zoneStateFromInput(input.isActive),
+        enabled: input.enabled ?? true,
+        deviceId: deviceInternalId,
+      },
+      select: { id: true },
+    });
+
+    if (input.actuator) {
+      await tx.zoneActuator.create({
+        data: {
+          deviceId: deviceInternalId,
+          zoneId: zone.id,
+          ...input.actuator,
+        },
+      });
+    }
+
+    await bumpDeviceConfigVersion(tx, deviceInternalId);
+
+    return tx.zone.findUniqueOrThrow({
+      where: { id: zone.id },
+      select: zoneSelect,
+    });
   });
 }
 
@@ -92,11 +169,7 @@ export async function createZone(
     try {
       return await createZoneWithIndex(device.id, input, input.index);
     } catch (err) {
-      if (isZoneIndexConflict(err)) {
-        throw zoneIndexConflictError();
-      }
-
-      throw err;
+      return rethrowZoneConstraint(err);
     }
   }
 
@@ -107,7 +180,7 @@ export async function createZone(
       return await createZoneWithIndex(device.id, input, nextIndex);
     } catch (err) {
       if (!isZoneIndexConflict(err)) {
-        throw err;
+        return rethrowZoneConstraint(err);
       }
     }
   }
@@ -120,13 +193,7 @@ export async function listZones(userId: string, deviceId: string) {
 
   return prisma.zone.findMany({
     where: { deviceId: device.id },
-    select: {
-      id: true,
-      name: true,
-      index: true,
-      isActive: true,
-      createdAt: true,
-    },
+    select: zoneSelect,
     orderBy: { index: 'asc' },
   });
 }
@@ -140,10 +207,7 @@ export async function updateZone(
   const device = await getOwnedDevice(userId, deviceId);
 
   const zone = await prisma.zone.findFirst({
-    where: {
-      id: zoneId,
-      deviceId: device.id,
-    },
+    where: { id: zoneId, deviceId: device.id },
     select: { id: true },
   });
 
@@ -155,24 +219,46 @@ export async function updateZone(
     await ensureZoneIndexAvailable(device.id, input.index, zoneId);
   }
 
+  const { actuator, isActive, ...zoneChanges } = input;
+
   try {
-    return await prisma.zone.update({
-      where: { id: zoneId },
-      data: input,
-      select: {
-        id: true,
-        name: true,
-        index: true,
-        isActive: true,
-        createdAt: true,
-      },
+    return await prisma.$transaction(async (tx) => {
+      await tx.zone.update({
+        where: { id: zoneId },
+        data: {
+          ...zoneChanges,
+          ...(isActive === undefined
+            ? {}
+            : {
+                isActive,
+                desiredState: zoneStateFromInput(isActive),
+              }),
+        },
+      });
+
+      if (actuator === null) {
+        await tx.zoneActuator.deleteMany({ where: { zoneId } });
+      } else if (actuator) {
+        await tx.zoneActuator.upsert({
+          where: { zoneId },
+          update: actuator,
+          create: {
+            deviceId: device.id,
+            zoneId,
+            ...actuator,
+          },
+        });
+      }
+
+      await bumpDeviceConfigVersion(tx, device.id);
+
+      return tx.zone.findUniqueOrThrow({
+        where: { id: zoneId },
+        select: zoneSelect,
+      });
     });
   } catch (err) {
-    if (isZoneIndexConflict(err)) {
-      throw zoneIndexConflictError();
-    }
-
-    throw err;
+    return rethrowZoneConstraint(err);
   }
 }
 
@@ -180,10 +266,7 @@ export async function deleteZone(userId: string, deviceId: string, zoneId: strin
   const device = await getOwnedDevice(userId, deviceId);
 
   const zone = await prisma.zone.findFirst({
-    where: {
-      id: zoneId,
-      deviceId: device.id,
-    },
+    where: { id: zoneId, deviceId: device.id },
     select: { id: true },
   });
 
@@ -191,7 +274,8 @@ export async function deleteZone(userId: string, deviceId: string, zoneId: strin
     throw new AppError('Area nao encontrada neste dispositivo', 404);
   }
 
-  await prisma.zone.delete({
-    where: { id: zoneId },
+  await prisma.$transaction(async (tx) => {
+    await tx.zone.delete({ where: { id: zoneId } });
+    await bumpDeviceConfigVersion(tx, device.id);
   });
 }

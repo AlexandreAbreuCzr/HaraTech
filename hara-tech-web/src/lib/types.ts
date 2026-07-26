@@ -16,7 +16,15 @@ export interface Zone {
   name: string
   index: number
   isActive: boolean
+  enabled: boolean
+  desiredState: 'OPEN' | 'CLOSED'
+  appliedState: 'OPEN' | 'CLOSED' | 'UNKNOWN'
+  confirmedState: 'OPEN' | 'CLOSED' | 'UNKNOWN' | 'UNAVAILABLE'
+  lastAppliedAngle: number | null
+  lastTelemetryAt: string | null
+  actuator: ActuatorConfig | null
   createdAt: string
+  updatedAt: string
 }
 
 export interface ActuatorConfig {
@@ -116,4 +124,15 @@ export interface RegaEvento {
   quantidadeMl: number
   data: string
   status: 'executado' | 'falhou' | 'cancelado'
+}
+
+export interface IrrigationLog {
+  id: string
+  startedAt: string
+  endedAt: string | null
+  durationSeconds: number | null
+  triggeredBy: 'MANUAL' | 'SCHEDULED' | 'SENSOR' | 'AUTOMATION'
+  createdAt: string
+  device: { deviceId: string }
+  zone: { index: number; name: string } | null
 }

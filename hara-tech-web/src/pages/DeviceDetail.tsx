@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, ApiError, type ZoneMutation } from '../lib/api'
 import Layout from '../components/Layout'
 import { Card, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -11,7 +11,7 @@ import { Modal } from '../components/ui/modal'
 import {
   ArrowLeft, Power, PowerOff, RotateCcw, RefreshCw,
   Zap, ZapOff, Trash2, Plus, Cpu, Droplets, Wifi,
-  Clock, HardDrive, Copy, Check,
+  Clock, HardDrive, Copy, Check, Settings,
 } from 'lucide-react'
 import type { Zone, DeviceConfig, Command, Telemetry } from '../lib/types'
 
@@ -23,68 +23,96 @@ export default function DeviceDetail() {
   const [commands, setCommands] = useState<Command[]>([])
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null)
   const [loading, setLoading] = useState(true)
-  const [newZoneName, setNewZoneName] = useState('')
   const [sending, setSending] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [zoneModal, setZoneModal] = useState(false)
+  const [zoneModal, setZoneModal] = useState<'new' | Zone | null>(null)
+  const [error, setError] = useState('')
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     if (!deviceId) return
     setLoading(true)
-    try {
-      const [z, c, cmds, t] = await Promise.all([
-        api.zonas.listar(deviceId).catch(() => ({ zones: [] as Zone[] })),
-        api.config.obter(deviceId).catch(() => null),
-        api.comandos.listar(deviceId).catch(() => ({ commands: [] as Command[] })),
-        api.telemetria.ultima(deviceId).catch(() => null),
-      ])
-      setZones(z.zones)
-      setConfig(c)
-      setCommands(cmds.commands)
-      setTelemetry(t)
-    } catch {} finally {
-      setLoading(false)
-    }
-  }
+    setError('')
+    const [zonesResult, configResult, commandsResult, telemetryResult] = await Promise.allSettled([
+      api.zonas.listar(deviceId),
+      api.config.obter(deviceId),
+      api.comandos.listar(deviceId),
+      api.telemetria.ultima(deviceId),
+    ])
 
-  useEffect(() => { fetchAll() }, [deviceId])
+    if (zonesResult.status === 'fulfilled') setZones(zonesResult.value.zones)
+    if (configResult.status === 'fulfilled') setConfig(configResult.value)
+    if (commandsResult.status === 'fulfilled') setCommands(commandsResult.value.commands)
+    if (telemetryResult.status === 'fulfilled') setTelemetry(telemetryResult.value)
+
+    const failure = [zonesResult, configResult, commandsResult, telemetryResult].find(
+      (result) => result.status === 'rejected'
+    )
+    if (failure?.status === 'rejected') {
+      setError(failure.reason instanceof ApiError ? failure.reason.message : 'Não foi possível atualizar todos os dados do dispositivo.')
+    }
+    setLoading(false)
+  }, [deviceId])
+
+  useEffect(() => {
+    void fetchAll()
+  }, [fetchAll])
 
   const sendCmd = async (type: string, payload?: Record<string, unknown>) => {
     if (!deviceId) return
+    setError('')
     setSending(type)
     try {
       await api.comandos.criar(deviceId, { type, payload })
-      setTimeout(fetchAll, 600)
-    } catch {}
-    setSending(null)
+      await fetchAll()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível enviar o comando.')
+    } finally {
+      setSending(null)
+    }
   }
 
-  const createZone = async () => {
-    if (!deviceId || !newZoneName.trim()) return
-    await api.zonas.criar(deviceId, { name: newZoneName.trim() })
-    setNewZoneName('')
-    setZoneModal(false)
-    fetchAll()
-  }
-
-  const deleteZone = async (zoneId: string) => {
+  const saveZone = async (input: ZoneMutation & { name: string }) => {
     if (!deviceId) return
-    await api.zonas.deletar(deviceId, zoneId)
-    fetchAll()
+    setError('')
+    try {
+      if (zoneModal === 'new') {
+        await api.zonas.criar(deviceId, input)
+      } else if (zoneModal) {
+        await api.zonas.atualizar(deviceId, zoneModal.id, input)
+      }
+      setZoneModal(null)
+      await fetchAll()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível salvar a área.')
+    }
   }
 
-  const copyId = () => {
-    if (deviceId) {
-      navigator.clipboard.writeText(deviceId)
+  const deleteZone = async (zone: Zone) => {
+    if (!deviceId || !window.confirm(`Remover a área “${zone.name}”? Esta ação não pode ser desfeita.`)) return
+    setError('')
+    try {
+      await api.zonas.deletar(deviceId, zone.id)
+      await fetchAll()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível remover a área.')
+    }
+  }
+
+  const copyId = async () => {
+    if (!deviceId) return
+    try {
+      await navigator.clipboard.writeText(deviceId)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Não foi possível copiar o identificador do dispositivo.')
     }
   }
 
   const moistureColor = (val: number, threshold: number) => {
     if (val < threshold) return 'bg-red-500'
     if (val < 70) return 'bg-amber-500'
-    return 'bg-blue-500'
+    return 'bg-[var(--accent-water)]'
   }
 
   if (loading) {
@@ -106,6 +134,11 @@ export default function DeviceDetail() {
   return (
     <Layout>
       <div className="max-w-4xl space-y-6">
+        {error && (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+            {error}
+          </div>
+        )}
         {/* Back button */}
         <button
           onClick={() => navigate('/dispositivos')}
@@ -124,8 +157,9 @@ export default function DeviceDetail() {
               <h1 className="text-2xl font-bold text-[var(--text-primary)] font-mono tracking-tight">{deviceId}</h1>
               <button
                 onClick={copyId}
-                className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
-                title="Copiar ID"
+              className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
+              title="Copiar ID"
+              aria-label="Copiar ID do dispositivo"
               >
                 {copied ? <Check className="size-4 text-brand-500" /> : <Copy className="size-4" />}
               </button>
@@ -257,7 +291,7 @@ export default function DeviceDetail() {
         <Card className="animate-slide-up">
           <CardHeader>
             <CardTitle>Zonas de Irrigação</CardTitle>
-            <Button size="sm" variant="secondary" onClick={() => setZoneModal(true)} icon={<Plus />}>
+            <Button size="sm" variant="secondary" onClick={() => setZoneModal('new')} icon={<Plus />}>
               Nova Zona
             </Button>
           </CardHeader>
@@ -269,7 +303,10 @@ export default function DeviceDetail() {
             </div>
           ) : (
             <div className="space-y-2">
-              {zones.map(z => (
+              {zones.map(z => {
+                const hasActuator = Boolean(z.actuator)
+                const isOpen = z.appliedState === 'OPEN' || (z.appliedState === 'UNKNOWN' && z.desiredState === 'OPEN')
+                return (
                 <div
                   key={z.id}
                   className="flex items-center justify-between p-4 rounded-xl bg-[var(--bg-tertiary)]/40 hover:bg-[var(--bg-tertiary)] transition-colors"
@@ -279,9 +316,14 @@ export default function DeviceDetail() {
                     <div>
                       <span className="text-sm font-medium text-[var(--text-primary)]">{z.name}</span>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <Badge variant={z.isActive ? 'success' : 'neutral'}>
-                          {z.isActive ? 'Aberta' : 'Fechada'}
+                        <Badge variant={isOpen ? 'success' : 'neutral'}>
+                          {isOpen ? 'Aberta' : 'Fechada'}
                         </Badge>
+                        {z.actuator ? (
+                          <span className="text-xs text-[var(--text-tertiary)]">GPIO {z.actuator.channel}</span>
+                        ) : (
+                          <span className="text-xs text-amber-600 dark:text-amber-400">Atuador não configurado</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -290,26 +332,41 @@ export default function DeviceDetail() {
                       size="sm"
                       variant="ghost"
                       onClick={() => sendCmd('OPEN_ZONE', { zoneIndex: z.index })}
-                      disabled={sending !== null}
+                      disabled={sending !== null || !hasActuator}
                       icon={<Zap />}
+                      title={hasActuator ? 'Abrir área' : 'Configure o atuador primeiro'}
+                      aria-label={`Abrir ${z.name}`}
                     />
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => sendCmd('CLOSE_ZONE', { zoneIndex: z.index })}
-                      disabled={sending !== null}
+                      disabled={sending !== null || !hasActuator}
                       icon={<ZapOff />}
+                      title={hasActuator ? 'Fechar área' : 'Configure o atuador primeiro'}
+                      aria-label={`Fechar ${z.name}`}
                     />
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => deleteZone(z.id)}
+                      onClick={() => setZoneModal(z)}
+                      icon={<Settings />}
+                      title="Configurar área e atuador"
+                      aria-label={`Configurar ${z.name}`}
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => deleteZone(z)}
                       icon={<Trash2 />}
                       className="hover:text-red-500"
+                      title="Remover área"
+                      aria-label={`Remover ${z.name}`}
                     />
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </Card>
@@ -358,25 +415,76 @@ export default function DeviceDetail() {
       </div>
 
       {/* New zone modal */}
-      <Modal open={zoneModal} onClose={() => setZoneModal(false)} title="Nova Zona">
-        <div className="space-y-4">
-          <Input
-            label="Nome da Zona"
-            value={newZoneName}
-            onChange={e => setNewZoneName(e.target.value)}
-            placeholder="Ex: Horta alface"
-            onKeyDown={e => e.key === 'Enter' && createZone()}
-          />
-          <div className="flex gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setZoneModal(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button onClick={createZone} className="flex-1">
-              Criar
-            </Button>
-          </div>
-        </div>
+      <Modal open={zoneModal !== null} onClose={() => setZoneModal(null)} title={zoneModal === 'new' ? 'Nova Área' : 'Configurar Área'}>
+        <ZoneForm
+          key={zoneModal === 'new' ? 'new' : zoneModal?.id}
+          zone={zoneModal === 'new' ? null : zoneModal}
+          onCancel={() => setZoneModal(null)}
+          onSave={saveZone}
+        />
       </Modal>
     </Layout>
+  )
+}
+
+function ZoneForm({
+  zone,
+  onCancel,
+  onSave,
+}: {
+  zone: Zone | null
+  onCancel: () => void
+  onSave: (input: ZoneMutation & { name: string }) => Promise<void>
+}) {
+  const [name, setName] = useState(zone?.name ?? '')
+  const [channel, setChannel] = useState(zone?.actuator?.channel?.toString() ?? '')
+  const [saving, setSaving] = useState(false)
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!name.trim()) return
+
+    const parsedChannel = channel.trim() === '' ? undefined : Number(channel)
+    if (parsedChannel !== undefined && (!Number.isInteger(parsedChannel) || parsedChannel < 0 || parsedChannel > 39)) return
+
+    setSaving(true)
+    try {
+      await onSave({
+        name: name.trim(),
+        ...(parsedChannel === undefined ? {} : { actuator: { channel: parsedChannel } }),
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <Input
+        label="Nome da área"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        placeholder="Ex.: Horta de alface"
+        required
+      />
+      <Input
+        label="GPIO do servo"
+        type="number"
+        value={channel}
+        onChange={(event) => setChannel(event.target.value)}
+        placeholder="Ex.: 13"
+        min={0}
+        max={39}
+      />
+      <p className="text-xs leading-5 text-[var(--text-tertiary)]">
+        Informe o GPIO ligado ao servo. Os exemplos de montagem usam 13 para a primeira área e 12 para a segunda.
+      </p>
+      <div className="flex gap-2 pt-2">
+        <Button variant="secondary" onClick={onCancel} className="flex-1">Cancelar</Button>
+        <Button type="submit" loading={saving} className="flex-1">
+          {zone ? 'Salvar' : 'Criar área'}
+        </Button>
+      </div>
+    </form>
   )
 }

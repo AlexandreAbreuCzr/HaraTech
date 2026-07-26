@@ -197,6 +197,7 @@ npm run dev                    # Iniciar em modo dev
 | `NODE_ENV` | Ambiente | `development` |
 | `DEVICE_PROVISIONING_SECRET` | Segredo para registro de devices | - |
 | `DEVICE_ONLINE_WINDOW_SECONDS` | Janela online/offline | `120` |
+| `COMMAND_RETRY_SECONDS` | Intervalo para reenviar comandos sem confirmação | `120` |
 
 ## Deploy no Render
 

@@ -1,12 +1,18 @@
+import {
+  Prisma,
+  ZoneAppliedState,
+  ZoneConfirmedState,
+  ZoneDesiredState,
+} from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../utils/AppError';
 import { getOwnedDevice } from '../utils/deviceOwnership';
 
 export interface TelemetryZoneInput {
   zoneIndex: number;
-  desiredState?: string;
-  appliedState?: string;
-  confirmedState?: string;
+  desiredState?: ZoneDesiredState;
+  appliedState?: ZoneAppliedState;
+  confirmedState?: ZoneConfirmedState;
   servoAngle?: number;
 }
 
@@ -34,71 +40,95 @@ export async function processTelemetry(
     throw new AppError('Dispositivo nao encontrado', 404);
   }
 
-  const telemetry = await prisma.deviceTelemetry.create({
-    data: {
-      deviceId: deviceInternalId,
-      soilMoisture: input.soilMoisture,
-      pumpOn: input.pumpOn,
-      firmwareTimestampMs: input.firmwareTimestampMs ?? null,
-      rssi: input.rssi ?? null,
-      lastIp: input.lastIp ?? null,
-      uptimeSeconds: input.uptimeSeconds ?? null,
-      firmwareVersion: input.firmwareVersion ?? null,
-      zones: input.zones
-        ? {
-            create: input.zones.map((zone) => ({
-              zoneIndex: zone.zoneIndex,
-              desiredState: zone.desiredState as any ?? null,
-              appliedState: (zone.appliedState as any) ?? 'UNKNOWN',
-              confirmedState: (zone.confirmedState as any) ?? 'UNAVAILABLE',
-              servoAngle: zone.servoAngle ?? null,
-            })),
-          }
-        : undefined,
-    },
-    select: {
-      id: true,
-      soilMoisture: true,
-      pumpOn: true,
-      firmwareTimestampMs: true,
-      rssi: true,
-      lastIp: true,
-      uptimeSeconds: true,
-      firmwareVersion: true,
-      createdAt: true,
-      zones: {
-        select: {
-          zoneIndex: true,
-          desiredState: true,
-          appliedState: true,
-          confirmedState: true,
-          servoAngle: true,
-        },
-      },
-    },
-  });
-
-  if (input.zones) {
-    const now = new Date();
-    for (const zone of input.zones) {
-      const updateData: any = {
-        lastTelemetryAt: now,
-        lastAppliedAngle: zone.servoAngle ?? null,
-      };
-      if (zone.appliedState) {
-        updateData.appliedState = zone.appliedState;
-      }
-      await prisma.zone.updateMany({
+  const zones = input.zones ?? [];
+  const configuredZones = zones.length
+    ? await prisma.zone.findMany({
         where: {
           deviceId: deviceInternalId,
-          index: zone.zoneIndex,
+          index: { in: zones.map((zone) => zone.zoneIndex) },
         },
+        select: { id: true, index: true },
+      })
+    : [];
+  const zoneByIndex = new Map(configuredZones.map((zone) => [zone.index, zone.id]));
+  const now = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const telemetry = await tx.deviceTelemetry.create({
+      data: {
+        deviceId: deviceInternalId,
+        soilMoisture: input.soilMoisture,
+        pumpOn: input.pumpOn,
+        firmwareTimestampMs: input.firmwareTimestampMs ?? null,
+        rssi: input.rssi ?? null,
+        lastIp: input.lastIp ?? null,
+        uptimeSeconds: input.uptimeSeconds ?? null,
+        firmwareVersion: input.firmwareVersion ?? null,
+        zones: zones.length
+          ? {
+              create: zones.map((zone) => ({
+                zoneIndex: zone.zoneIndex,
+                desiredState: zone.desiredState ?? null,
+                appliedState: zone.appliedState ?? 'UNKNOWN',
+                confirmedState: zone.confirmedState ?? 'UNAVAILABLE',
+                servoAngle: zone.servoAngle ?? null,
+                ...(zoneByIndex.has(zone.zoneIndex)
+                  ? { zone: { connect: { id: zoneByIndex.get(zone.zoneIndex)! } } }
+                  : {}),
+              })),
+            }
+          : undefined,
+      },
+      select: {
+        id: true,
+        soilMoisture: true,
+        pumpOn: true,
+        firmwareTimestampMs: true,
+        rssi: true,
+        lastIp: true,
+        uptimeSeconds: true,
+        firmwareVersion: true,
+        createdAt: true,
+        zones: {
+          select: {
+            zoneIndex: true,
+            desiredState: true,
+            appliedState: true,
+            confirmedState: true,
+            servoAngle: true,
+          },
+        },
+      },
+    });
+
+    const deviceUpdate: Prisma.DeviceUpdateInput = { lastSeen: now };
+    if (input.rssi !== undefined) deviceUpdate.lastRssi = input.rssi;
+    if (input.lastIp !== undefined) deviceUpdate.lastIp = input.lastIp;
+    await tx.device.update({ where: { id: deviceInternalId }, data: deviceUpdate });
+
+    for (const zone of zones) {
+      const updateData: Prisma.ZoneUpdateManyMutationInput = {
+        lastTelemetryAt: now,
+      };
+      if (zone.servoAngle !== undefined) updateData.lastAppliedAngle = zone.servoAngle;
+      if (zone.appliedState !== undefined) {
+        updateData.appliedState = zone.appliedState;
+        updateData.isActive = zone.appliedState === 'OPEN';
+      }
+      if (zone.confirmedState !== undefined) {
+        updateData.confirmedState = zone.confirmedState;
+      } else if (zone.appliedState !== undefined) {
+        updateData.confirmedState =
+          zone.appliedState === 'UNKNOWN' ? 'UNKNOWN' : zone.appliedState;
+      }
+      await tx.zone.updateMany({
+        where: { deviceId: deviceInternalId, index: zone.zoneIndex },
         data: updateData,
       });
     }
-  }
 
-  return telemetry;
+    return telemetry;
+  });
 }
 
 export async function getLatestTelemetry(userId: string, deviceId: string) {
