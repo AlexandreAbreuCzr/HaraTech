@@ -1,91 +1,141 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Layout from '../components/Layout'
-import { historicoStore } from '../lib/store'
+import { api, ApiError } from '../lib/api'
 import { Card } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
-import { History as HistoryIcon, Droplets, CheckCircle2, XCircle, Timer } from 'lucide-react'
+import { Skeleton } from '../components/ui/skeleton'
+import {
+  History as HistoryIcon,
+  Droplets,
+  CheckCircle2,
+  Clock3,
+  RefreshCw,
+} from 'lucide-react'
+import type { IrrigationLog } from '../lib/types'
 
-const filtros = [
-  { value: 'todos', label: 'Todos' },
-  { value: 'executado', label: 'Executados' },
-  { value: 'falhou', label: 'Falhas' },
-  { value: 'cancelado', label: 'Cancelados' },
+const filters = [
+  { value: 'all', label: 'Todos' },
+  { value: 'in-progress', label: 'Em andamento' },
+  { value: 'completed', label: 'Concluídos' },
 ] as const
 
-const statusConfig: Record<string, { icon: React.ReactNode; badge: 'success' | 'danger' | 'warning' }> = {
-  executado: { icon: <CheckCircle2 className="size-4" />, badge: 'success' },
-  falhou: { icon: <XCircle className="size-4" />, badge: 'danger' },
-  cancelado: { icon: <Timer className="size-4" />, badge: 'warning' },
+type Filter = (typeof filters)[number]['value']
+
+const triggerLabels: Record<IrrigationLog['triggeredBy'], string> = {
+  MANUAL: 'Manual',
+  SCHEDULED: 'Programada',
+  SENSOR: 'Sensor',
+  AUTOMATION: 'Automação',
+}
+
+function formatDuration(seconds: number | null) {
+  if (seconds === null) return 'Em andamento'
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remaining = seconds % 60
+  return remaining ? `${minutes}min ${remaining}s` : `${minutes}min`
 }
 
 export default function History() {
-  const [eventos] = useState(historicoStore.list())
-  const [filtro, setFiltro] = useState<string>('todos')
+  const [logs, setLogs] = useState<IrrigationLog[]>([])
+  const [filter, setFilter] = useState<Filter>('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const filtered = filtro === 'todos' ? eventos : eventos.filter(e => e.status === filtro)
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await api.irrigacao.listar()
+      setLogs(response.logs)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível carregar o histórico.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const filtered = logs.filter((log) =>
+    filter === 'all' ||
+    (filter === 'in-progress' ? !log.endedAt : Boolean(log.endedAt))
+  )
 
   return (
     <Layout>
       <PageHeader
         title="Histórico"
-        description={`${eventos.length} evento${eventos.length !== 1 ? 's' : ''} registrado${eventos.length !== 1 ? 's' : ''}`}
+        description={`${logs.length} irrigação${logs.length !== 1 ? 'ões' : ''} confirmada${logs.length !== 1 ? 's' : ''} pelo dispositivo`}
+        actions={<Button variant="secondary" size="sm" onClick={() => void load()} icon={<RefreshCw />}>Atualizar</Button>}
       />
 
-      {/* Filter tabs */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {filtros.map(f => (
+      {error && (
+        <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-2" aria-label="Filtros do histórico">
+        {filters.map((item) => (
           <button
-            key={f.value}
-            onClick={() => setFiltro(f.value)}
+            key={item.value}
+            onClick={() => setFilter(item.value)}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap cursor-pointer
-              ${filtro === f.value
+              ${filter === item.value
                 ? 'bg-brand-600 text-white shadow-sm'
                 : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] border border-[var(--border-primary)] hover:bg-[var(--bg-tertiary)]'
               }`}
           >
-            {f.label}
+            {item.label}
           </button>
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(4)].map((_, index) => <Skeleton key={index} className="h-20" />)}
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={<HistoryIcon className="size-6" />}
-          title="Nenhum evento encontrado"
-          description={filtro !== 'todos' ? 'Tente outro filtro' : 'Os registros aparecerão após as irrigações'}
+          title="Nenhuma irrigação confirmada"
+          description={filter !== 'all' ? 'Tente outro filtro.' : 'Os registros aparecerão depois que o ESP32 confirmar a abertura ou o fechamento de uma área.'}
         />
       ) : (
         <div className="space-y-2">
-          {filtered.map((e, idx) => {
-            const cfg = statusConfig[e.status]
+          {filtered.map((log, index) => {
+            const isCompleted = Boolean(log.endedAt)
             return (
-              <Card key={e.id} className="animate-slide-up" style={{ animationDelay: `${idx * 30}ms` }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`size-9 rounded-xl flex items-center justify-center
-                      ${e.status === 'executado' ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-500' :
-                        e.status === 'falhou' ? 'bg-red-50 dark:bg-red-950 text-red-500' :
-                        'bg-amber-50 dark:bg-amber-950 text-amber-500'}`}>
-                      {cfg?.icon}
+              <Card key={log.id} className="animate-slide-up" style={{ animationDelay: `${index * 30}ms` }}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className={`size-9 shrink-0 rounded-xl flex items-center justify-center ${isCompleted ? 'bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>
+                      {isCompleted ? <CheckCircle2 className="size-4" /> : <Clock3 className="size-4" />}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-[var(--text-primary)]">{e.culturaNome}</span>
-                        <span className="text-xs text-[var(--text-tertiary)]">— {e.zonaNome}</span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-medium text-[var(--text-primary)]">
+                          {log.zone ? log.zone.name : 'Bomba principal'}
+                        </span>
+                        <span className="text-xs text-[var(--text-tertiary)]">{log.device.deviceId}</span>
                       </div>
                       <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                        {new Date(e.data).toLocaleString()}
+                        Iniciada em {new Date(log.startedAt).toLocaleString('pt-BR')}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-blue-500 flex items-center gap-1">
-                      <Droplets className="size-3.5" /> {e.quantidadeMl}ml
+                  <div className="flex items-center gap-3 pl-13 sm:pl-0">
+                    <span className="text-sm font-medium text-[var(--accent-water)] flex items-center gap-1">
+                      <Droplets className="size-3.5" /> {formatDuration(log.durationSeconds)}
                     </span>
-                    <Badge variant={cfg?.badge || 'neutral'}>
-                      {e.status}
+                    <Badge variant={isCompleted ? 'success' : 'warning'}>
+                      {isCompleted ? triggerLabels[log.triggeredBy] : 'Em andamento'}
                     </Badge>
                   </div>
                 </div>

@@ -22,6 +22,8 @@ services:
         generateValue: true
       - key: DEVICE_ONLINE_WINDOW_SECONDS
         value: 120
+      - key: COMMAND_RETRY_SECONDS
+        value: 120
 
 databases:
   - name: hara-tech-db

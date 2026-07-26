@@ -1,7 +1,8 @@
 import { type ReactNode, useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../lib/auth'
-import { useTheme } from '../lib/theme'
+import { useAuth } from '../lib/auth-context'
+import { useTheme } from '../lib/theme-context'
+import { BrandLogo } from './BrandLogo'
 import {
   LayoutDashboard,
   HardDrive,
@@ -24,14 +25,6 @@ const nav = [
   { to: '/historico', label: 'Histórico', icon: History },
 ]
 
-const pageTitles: Record<string, string> = {
-  '/': 'Dashboard',
-  '/dispositivos': 'Dispositivos',
-  '/culturas': 'Culturas',
-  '/programacao': 'Programação',
-  '/historico': 'Histórico',
-}
-
 export default function Layout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout } = useAuth()
@@ -46,9 +39,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     return location.pathname.startsWith(path)
   }
 
-  const currentPage = Object.entries(pageTitles).find(([path]) =>
-    location.pathname.startsWith(path)
-  )?.[1] || ''
+  const currentPage = nav.find((item) => isActive(item.to))?.label ?? 'Hara Tech'
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-primary)' }}>
@@ -62,18 +53,16 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[var(--bg-secondary)] border-r border-[var(--border-primary)] transform transition-transform duration-200 ease-out
+        aria-label="Navegação principal"
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[var(--bg-secondary)] border-r border-[var(--border-primary)] transform transition-transform duration-200 ease-out flex flex-col
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0 lg:static lg:inset-auto`}
       >
-        <div className="flex items-center gap-3 h-16 px-6 border-b border-[var(--border-primary)]">
-          <div className="size-8 rounded-xl bg-brand-600 flex items-center justify-center text-white text-sm font-bold">
-            H
-          </div>
-          <span className="font-semibold text-[var(--text-primary)]">Hara</span>
+        <div className="h-20 px-5 border-b border-[var(--border-primary)] flex items-center">
+          <BrandLogo compact />
         </div>
 
-        <nav className="p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {nav.map(item => (
             <NavLink
               key={item.to}
@@ -92,7 +81,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-[var(--border-primary)]">
+        <div className="p-3 border-t border-[var(--border-primary)]">
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl">
             <div className="size-8 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center text-sm font-medium text-brand-700 dark:text-brand-300">
               {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || '?'}
@@ -109,6 +98,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               onClick={handleLogout}
               className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
               title="Sair"
+              aria-label="Sair da conta"
             >
               <LogOut className="size-4" />
             </button>
@@ -124,11 +114,12 @@ export default function Layout({ children }: { children: ReactNode }) {
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="lg:hidden p-2 -ml-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+              aria-label={sidebarOpen ? 'Fechar menu' : 'Abrir menu'}
             >
               {sidebarOpen ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
             <nav className="hidden sm:flex items-center gap-1.5 text-sm">
-              <span className="text-[var(--text-tertiary)]">Hara</span>
+              <span className="text-[var(--text-tertiary)]">Hara Tech</span>
               <ChevronRight className="size-3.5 text-[var(--text-tertiary)]" />
               <span className="text-[var(--text-primary)] font-medium">{currentPage}</span>
             </nav>
@@ -139,6 +130,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               onClick={toggle}
               className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
               title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+              aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
             >
               {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </button>

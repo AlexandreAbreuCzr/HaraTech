@@ -35,12 +35,14 @@ export function Button({
   children,
   disabled,
   className = '',
+  type,
   ...props
 }: ButtonProps) {
   return (
     <button
       className={`inline-flex items-center justify-center font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-40 disabled:pointer-events-none cursor-pointer ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       disabled={disabled || loading}
+      type={type ?? 'button'}
       {...props}
     >
       {loading ? (

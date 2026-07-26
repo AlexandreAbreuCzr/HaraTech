@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { AppError } from '../utils/AppError';
 import { Prisma } from '@prisma/client';
+import { getOwnedDevice } from '../utils/deviceOwnership';
 
 export interface ZoneActuatorConfig {
   type: string;
@@ -122,4 +123,31 @@ export async function getDeviceConfig(
         : null,
     })),
   };
+}
+
+/** Returns the runtime configuration for a dashboard user who owns the device. */
+export async function getUserDeviceConfig(userId: string, deviceId: string) {
+  const device = await getOwnedDevice(userId, deviceId);
+  const config = await getDeviceConfig(device.id);
+
+  if (!config) {
+    throw new AppError('Configuracao do dispositivo indisponivel', 404);
+  }
+
+  return config;
+}
+
+/**
+ * Every change that the firmware needs to download receives a newer version.
+ * The upsert also repairs devices created before runtime configuration existed.
+ */
+export async function bumpDeviceConfigVersion(
+  client: Prisma.TransactionClient,
+  deviceInternalId: string
+) {
+  return client.deviceConfig.upsert({
+    where: { deviceId: deviceInternalId },
+    update: { configVersion: { increment: 1 } },
+    create: { deviceId: deviceInternalId },
+  });
 }

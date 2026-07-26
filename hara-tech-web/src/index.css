@@ -1,65 +1,78 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-50: #f0fdf4;
-  --color-brand-100: #dcfce7;
-  --color-brand-200: #bbf7d0;
-  --color-brand-300: #86efac;
-  --color-brand-400: #4ade80;
-  --color-brand-500: #22c55e;
-  --color-brand-600: #16a34a;
-  --color-brand-700: #15803d;
-  --color-brand-800: #166534;
-  --color-brand-900: #14532d;
-  --color-brand-950: #052e16;
+  --color-brand-50: #f2f7ee;
+  --color-brand-100: #e2edd9;
+  --color-brand-200: #c5dcb8;
+  --color-brand-300: #9ec692;
+  --color-brand-400: #78ad6c;
+  --color-brand-500: #598f57;
+  --color-brand-600: #3f7648;
+  --color-brand-700: #315e3a;
+  --color-brand-800: #294c31;
+  --color-brand-900: #1e3927;
+  --color-brand-950: #0f2118;
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --bg-primary: #fafafa;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f4f4f5;
+  --bg-primary: #f7f7f2;
+  --bg-secondary: #fffefb;
+  --bg-tertiary: #edf0e7;
   --bg-elevated: #ffffff;
-  --border-primary: #e4e4e7;
-  --border-secondary: #f4f4f5;
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
-  --text-tertiary: #a1a1aa;
-  --text-inverse: #fafafa;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.03);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.04), 0 2px 4px -2px rgb(0 0 0 / 0.03);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.03);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.03);
+  --border-primary: #dce3d4;
+  --border-secondary: #edf0e7;
+  --text-primary: #17211a;
+  --text-secondary: #4b5a4d;
+  --text-tertiary: #778477;
+  --text-inverse: #fffefb;
+  --accent-water: #167a97;
+  --accent-sun: #d59b27;
+  --accent-leaf: #3f7648;
+  --shadow-sm: 0 1px 2px 0 rgb(23 33 26 / 0.05);
+  --shadow-md: 0 6px 14px -6px rgb(23 33 26 / 0.12), 0 2px 4px -3px rgb(23 33 26 / 0.06);
+  --shadow-lg: 0 16px 30px -16px rgb(23 33 26 / 0.18), 0 8px 12px -8px rgb(23 33 26 / 0.08);
+  --shadow-xl: 0 24px 42px -20px rgb(23 33 26 / 0.22), 0 10px 18px -12px rgb(23 33 26 / 0.1);
 }
 
 .dark {
-  --bg-primary: #09090b;
-  --bg-secondary: #18181b;
-  --bg-tertiary: #27272a;
-  --bg-elevated: #1f1f23;
-  --border-primary: #27272a;
-  --border-secondary: #18181b;
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #52525b;
-  --text-inverse: #18181b;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.3);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+  --bg-primary: #101914;
+  --bg-secondary: #17231b;
+  --bg-tertiary: #223126;
+  --bg-elevated: #1c2a20;
+  --border-primary: #304034;
+  --border-secondary: #223126;
+  --text-primary: #f4f6ef;
+  --text-secondary: #bdc9bc;
+  --text-tertiary: #7d907e;
+  --text-inverse: #17211a;
+  --accent-water: #56b7cf;
+  --accent-sun: #e8bd60;
+  --accent-leaf: #8fbd84;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.32);
+  --shadow-md: 0 6px 14px -6px rgb(0 0 0 / 0.42), 0 2px 4px -3px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 16px 30px -16px rgb(0 0 0 / 0.55), 0 8px 12px -8px rgb(0 0 0 / 0.35);
+  --shadow-xl: 0 24px 42px -20px rgb(0 0 0 / 0.62), 0 10px 18px -12px rgb(0 0 0 / 0.42);
 }
 
 html {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-primary);
+  color-scheme: light;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
+  min-width: 320px;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dark {
+  color-scheme: dark;
 }
 
 *,
@@ -69,6 +82,11 @@ body {
   transition-property: background-color, border-color, color;
   transition-duration: 0.15s;
   transition-timing-function: ease;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-water);
+  outline-offset: 2px;
 }
 
 @keyframes fade-in {
@@ -107,6 +125,22 @@ body {
   background: var(--bg-tertiary);
   border-radius: 6px;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.brand-paper {
+  background: #ffffff;
+  box-shadow: 0 8px 24px -14px rgb(23 33 26 / 0.38);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 ::-webkit-scrollbar {

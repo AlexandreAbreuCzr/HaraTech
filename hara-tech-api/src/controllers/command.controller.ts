@@ -10,18 +10,17 @@ import {
 } from '../services/command.service';
 import { sendSuccess } from '../utils/response';
 
-const createCommandSchema = z.object({
-  type: z.enum([
-    'OPEN_ZONE',
-    'CLOSE_ZONE',
-    'PUMP_ON',
-    'PUMP_OFF',
-    'SYNC_CONFIG',
-    'RESTART',
-    'OTA_UPDATE',
-  ]),
+const zoneCommandSchema = z.object({
+  type: z.enum(['OPEN_ZONE', 'CLOSE_ZONE']),
+  payload: z.object({ zoneIndex: z.number().int().min(0).max(255) }),
+});
+
+const genericCommandSchema = z.object({
+  type: z.enum(['PUMP_ON', 'PUMP_OFF', 'SYNC_CONFIG', 'RESTART', 'OTA_UPDATE']),
   payload: z.record(z.unknown()).optional(),
 });
+
+const createCommandSchema = z.union([zoneCommandSchema, genericCommandSchema]);
 
 const ackCommandSchema = z.object({
   success: z.boolean(),

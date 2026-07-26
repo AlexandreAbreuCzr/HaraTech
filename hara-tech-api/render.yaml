@@ -3,9 +3,8 @@ services:
     name: hara-tech-api
     runtime: node
     plan: free
-    buildCommand: npm install && npm run db:generate && npm run build
-    preDeployCommand: npm run db:push
-    startCommand: npm start
+    buildCommand: npm install --include=dev && npm run db:generate && npm run build
+    startCommand: npx prisma db push && npm start
     healthCheckPath: /api/v1/health
     envVars:
       - key: DATABASE_URL
@@ -21,6 +20,8 @@ services:
       - key: DEVICE_PROVISIONING_SECRET
         generateValue: true
       - key: DEVICE_ONLINE_WINDOW_SECONDS
+        value: 120
+      - key: COMMAND_RETRY_SECONDS
         value: 120
 
 databases:

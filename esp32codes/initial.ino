@@ -46,6 +46,8 @@ const unsigned long DISPLAY_INTERVAL_MS = 2000;
 const unsigned long CONFIG_SYNC_INTERVAL_MS = 300000;
 const unsigned long TELEMETRY_INTERVAL_MS = 60000;
 const unsigned long COMMAND_INTERVAL_MS = 30000;
+const uint8_t COMMAND_ACK_MAX_ATTEMPTS = 3;
+const unsigned long COMMAND_ACK_RETRY_DELAY_MS = 500;
 const uint16_t HTTP_TIMEOUT_MS = 10000;
 const unsigned long WDT_TIMEOUT_SEC = 30;
 
@@ -75,6 +77,7 @@ int soilMoisture = 0;
 int lastHttpCode = 0;
 bool pumpOn = false;
 bool apiReady = false;
+bool restartRequested = false;
 
 struct ActuatorCfg {
   int channel;
@@ -98,7 +101,9 @@ struct DeviceCfg {
   int configVersion;
   String operationMode;
   int moistureLimit;
+  int heartbeatIntervalSeconds;
   int telemetryIntervalSeconds;
+  int configSyncIntervalSeconds;
   String pumpMode;
   int maxSimultaneousZones;
   ZoneCfg zones[MAX_ZONES];
@@ -112,7 +117,18 @@ struct ZoneState {
   bool servoAttached;
 };
 
-DeviceCfg config = { 0, "auto", 35, 60, "auto", 0, {}, 0 };
+DeviceCfg config = {
+  0,
+  "AUTO",
+  35,
+  (int)(HEARTBEAT_INTERVAL_MS / 1000),
+  (int)(TELEMETRY_INTERVAL_MS / 1000),
+  (int)(CONFIG_SYNC_INTERVAL_MS / 1000),
+  "AUTO",
+  0,
+  {},
+  0,
+};
 ZoneState zoneStates[MAX_ZONES];
 int zoneStateCount = 0;
 
@@ -546,7 +562,18 @@ bool syncConfigFromApi() {
 
   config.operationMode = configData["operationMode"] | "AUTO";
   config.moistureLimit = configData["moistureThreshold"] | 35;
-  config.telemetryIntervalSeconds = configData["telemetryIntervalSeconds"] | 60;
+  config.heartbeatIntervalSeconds = max(
+    1,
+    configData["heartbeatIntervalSeconds"] | (int)(HEARTBEAT_INTERVAL_MS / 1000)
+  );
+  config.telemetryIntervalSeconds = max(
+    1,
+    configData["telemetryIntervalSeconds"] | (int)(TELEMETRY_INTERVAL_MS / 1000)
+  );
+  config.configSyncIntervalSeconds = max(
+    1,
+    configData["configSyncIntervalSeconds"] | (int)(CONFIG_SYNC_INTERVAL_MS / 1000)
+  );
   config.pumpMode = configData["pumpMode"] | "AUTO";
   config.maxSimultaneousZones = configData["maxSimultaneousZones"] | 0;
   int newVersion = configData["configVersion"] | 0;
@@ -593,7 +620,7 @@ bool sendTelemetryToApi() {
   }
   http.addHeader("Content-Type", "application/json");
   addDeviceAuthHeader(http);
-  StaticJsonDocument<1024> doc;
+  StaticJsonDocument<4096> doc;
   doc["soilMoisture"] = soilMoisture;
   doc["pumpOn"] = pumpOn;
   doc["firmwareTimestampMs"] = millis();
@@ -652,7 +679,7 @@ bool checkPendingCommands() {
   }
   String response = http.getString();
   http.end();
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(4096);
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
     return false;
@@ -671,8 +698,13 @@ bool checkPendingCommands() {
     const char* cmdId = cmd["id"];
     const char* cmdType = cmd["type"];
     JsonObject payload = cmd["payload"];
+    restartRequested = false;
     bool success = executeCommand(cmdType, payload);
-    acknowledgeCommand(cmdId, success, success ? "" : "Falha na execucao");
+    bool acknowledged = acknowledgeCommand(cmdId, success, success ? "" : "Falha na execucao");
+    if (success && acknowledged && restartRequested) {
+      delay(500);
+      ESP.restart();
+    }
   }
   return true;
 }
@@ -683,8 +715,7 @@ bool executeCommand(const char* type, JsonObject payload) {
     return syncConfigFromApi();
   }
   if (strcmp(type, "RESTART") == 0) {
-    delay(500);
-    ESP.restart();
+    restartRequested = true;
     return true;
   }
   if (strcmp(type, "PUMP_ON") == 0) {
@@ -729,12 +760,6 @@ bool acknowledgeCommand(const char* commandId, bool success, const String& failR
   if (!hasDeviceCredentials()) {
     return false;
   }
-  HTTPClient http;
-  if (!beginHttp(http, "/devices/" + deviceId + "/commands/" + String(commandId) + "/ack")) {
-    return false;
-  }
-  http.addHeader("Content-Type", "application/json");
-  addDeviceAuthHeader(http);
   StaticJsonDocument<256> doc;
   doc["success"] = success;
   if (!success && failReason.length() > 0) {
@@ -742,9 +767,28 @@ bool acknowledgeCommand(const char* commandId, bool success, const String& failR
   }
   String body;
   serializeJson(doc, body);
-  int code = http.POST(body);
-  http.end();
-  return code == 200;
+
+  for (uint8_t attempt = 0; attempt < COMMAND_ACK_MAX_ATTEMPTS; attempt++) {
+    HTTPClient http;
+    if (beginHttp(http, "/devices/" + deviceId + "/commands/" + String(commandId) + "/ack")) {
+      http.addHeader("Content-Type", "application/json");
+      addDeviceAuthHeader(http);
+      int code = http.POST(body);
+      lastHttpCode = code;
+      http.end();
+      if (code == 200) {
+        return true;
+      }
+    } else {
+      lastHttpCode = 0;
+    }
+
+    if (attempt + 1 < COMMAND_ACK_MAX_ATTEMPTS) {
+      delay(COMMAND_ACK_RETRY_DELAY_MS);
+    }
+  }
+
+  return false;
 }
 
 // ============================================================
@@ -816,14 +860,14 @@ void loop() {
 
   if (WiFi.status() == WL_CONNECTED &&
       hasDeviceCredentials() &&
-      now - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
+      now - lastHeartbeatAt >= (unsigned long)config.heartbeatIntervalSeconds * 1000) {
     lastHeartbeatAt = now;
     sendHeartbeat();
   }
 
   if (WiFi.status() == WL_CONNECTED &&
       hasDeviceCredentials() &&
-      now - lastConfigSyncAt >= CONFIG_SYNC_INTERVAL_MS) {
+      now - lastConfigSyncAt >= (unsigned long)config.configSyncIntervalSeconds * 1000) {
     lastConfigSyncAt = now;
     syncConfigFromApi();
   }

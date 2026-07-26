@@ -129,7 +129,7 @@ export default function Dashboard() {
           />
           <StatCard
             icon={<CalendarClock className="size-5 text-amber-600 dark:text-amber-400" />}
-            label="Regas Ativas"
+            label="Planos Ativos"
             value={ativas}
             sub={programacoes.length > 0 ? `${programacoes.length} programações` : undefined}
             color="bg-amber-50 dark:bg-amber-950"
@@ -198,17 +198,17 @@ export default function Dashboard() {
             )}
           </Card>
 
-          {/* Next irrigations */}
+          {/* Irrigation plans are local planning aids until device scheduling is enabled. */}
           <Card>
             <CardHeader>
-              <CardTitle>Próximas Irrigações</CardTitle>
+              <CardTitle>Irrigações Planejadas</CardTitle>
               {ativas > 0 && <Badge variant="success">{ativas} ativas</Badge>}
             </CardHeader>
             {programacoes.filter(p => p.ativo).length === 0 ? (
               <EmptyState
                 icon={<CalendarClock className="size-6" />}
-                title="Nenhuma programação ativa"
-                description="Crie programações em Programação para irrigar automaticamente"
+                title="Nenhum plano ativo"
+                description="Crie planos em Programação para organizar a rotina de irrigação"
                 action={
                   <button
                     onClick={() => navigate('/programacao')}
@@ -267,7 +267,7 @@ export default function Dashboard() {
                 const color = moisture === null ? 'bg-[var(--bg-tertiary)]'
                   : moisture < threshold ? 'bg-red-500'
                   : moisture < 70 ? 'bg-amber-500'
-                  : 'bg-blue-500'
+                  : 'bg-[var(--accent-water)]'
                 const status = moisture === null ? '—'
                   : moisture < threshold ? 'Seco'
                   : moisture < 70 ? 'Úmido'

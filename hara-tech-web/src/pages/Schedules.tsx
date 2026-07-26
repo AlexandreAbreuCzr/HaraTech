@@ -49,7 +49,7 @@ export default function Schedules() {
         <EmptyState
           icon={<CalendarClock className="size-6" />}
           title="Nenhuma programação"
-          description="Crie programações para irrigar automaticamente suas culturas"
+          description="Crie planos para organizar a rotina de irrigação das suas culturas"
           action={
             <Button onClick={() => setShowForm(true)} icon={<Plus />}>
               Nova Programação
@@ -118,6 +118,7 @@ function ScheduleForm({ onClose, onSave }: { onClose: () => void; onSave: () => 
   const [horario, setHorario] = useState('06:00')
   const [dias, setDias] = useState<number[]>([1, 2, 3, 4, 5])
   const [zones, setZones] = useState<{ index: number; name: string }[]>([])
+  const [formError, setFormError] = useState('')
 
   useEffect(() => {
     setCulturas(culturasStore.list())
@@ -129,6 +130,8 @@ function ScheduleForm({ onClose, onSave }: { onClose: () => void; onSave: () => 
 
   useEffect(() => {
     if (dispositivoId) {
+      setZones([])
+      setZonaNome('')
       api.zonas.listar(dispositivoId).then(z => {
         setZones(z.zones)
         if (z.zones.length > 0) {
@@ -145,7 +148,19 @@ function ScheduleForm({ onClose, onSave }: { onClose: () => void; onSave: () => 
   }
 
   const handleSave = () => {
-    if (!dispositivoId || !culturaId || dias.length === 0) return
+    setFormError('')
+    if (!dispositivoId) {
+      setFormError('Vincule um dispositivo antes de criar um plano.')
+      return
+    }
+    if (zones.length === 0) {
+      setFormError('Crie e configure ao menos uma área no dispositivo antes de continuar.')
+      return
+    }
+    if (!culturaId || dias.length === 0) {
+      setFormError('Escolha uma cultura e pelo menos um dia da semana.')
+      return
+    }
     const qtd = cultura?.aguaPorRegaMl || 200
     programacoesStore.add({
       id: crypto.randomUUID(),
@@ -160,7 +175,11 @@ function ScheduleForm({ onClose, onSave }: { onClose: () => void; onSave: () => 
   return (
     <Modal open={true} onClose={onClose} title="Nova Programação">
       <div className="space-y-4">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          Este plano fica salvo neste navegador para organização. A execução automática pelo dispositivo ainda precisa ser configurada no firmware.
+        </div>
         <Select label="Dispositivo" value={dispositivoId} onChange={e => setDispositivoId(e.target.value)}>
+          <option value="" disabled>Selecione um dispositivo</option>
           {devices.map(d => (
             <option key={d.deviceId} value={d.deviceId}>{d.deviceId}</option>
           ))}
@@ -171,12 +190,14 @@ function ScheduleForm({ onClose, onSave }: { onClose: () => void; onSave: () => 
           setZonaIndex(idx)
           setZonaNome(zones.find(z => z.index === idx)?.name || '')
         }}>
+          {zones.length === 0 && <option value={0} disabled>Nenhuma área disponível</option>}
           {zones.map(z => (
             <option key={z.index} value={z.index}>#{z.index} - {z.name}</option>
           ))}
         </Select>
 
         <Select label="Cultura" value={culturaId} onChange={e => setCulturaId(e.target.value)}>
+          <option value="" disabled>Selecione uma cultura</option>
           {culturas.map(c => (
             <option key={c.id} value={c.id}>{c.icone} {c.nome} ({c.aguaPorRegaMl}ml)</option>
           ))}
@@ -212,6 +233,8 @@ function ScheduleForm({ onClose, onSave }: { onClose: () => void; onSave: () => 
             </p>
           </div>
         )}
+
+        {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
 
         <div className="flex gap-2 pt-2">
           <Button variant="secondary" onClick={onClose} className="flex-1">Cancelar</Button>

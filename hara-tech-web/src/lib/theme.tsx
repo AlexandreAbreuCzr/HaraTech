@@ -1,14 +1,5 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-
-type Theme = 'light' | 'dark'
-
-interface ThemeContextType {
-  theme: Theme
-  toggle: () => void
-  setTheme: (t: Theme) => void
-}
-
-const ThemeContext = createContext<ThemeContextType | null>(null)
+import { useState, useEffect, type ReactNode } from 'react'
+import { ThemeContext, type Theme } from './theme-context'
 
 const STORAGE_KEY = 'hara_theme'
 
@@ -33,10 +24,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       {children}
     </ThemeContext.Provider>
   )
-}
-
-export function useTheme() {
-  const ctx = useContext(ThemeContext)
-  if (!ctx) throw new Error('useTheme outside ThemeProvider')
-  return ctx
 }

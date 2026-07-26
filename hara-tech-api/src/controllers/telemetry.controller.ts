@@ -21,7 +21,14 @@ const telemetrySchema = z.object({
   lastIp: z.string().ip().optional(),
   uptimeSeconds: z.number().int().positive().optional(),
   firmwareVersion: z.string().max(32).optional(),
-  zones: z.array(telemetryZoneSchema).max(255).optional(),
+  zones: z
+    .array(telemetryZoneSchema)
+    .max(255)
+    .refine(
+      (zones) => new Set(zones.map((zone) => zone.zoneIndex)).size === zones.length,
+      { message: 'zoneIndex nao pode se repetir na mesma telemetria' }
+    )
+    .optional(),
 });
 
 export async function telemetryHandler(
