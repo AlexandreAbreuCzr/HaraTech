@@ -12,11 +12,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    'bg-[var(--ink)] text-white hover:bg-brand-800 active:bg-brand-900 shadow-sm hover:shadow-md',
+    'bg-[var(--ink)] text-white hover:bg-brand-800 active:translate-y-px shadow-sm hover:shadow-md',
   secondary:
-    'border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]',
+    'border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:border-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] active:translate-y-px',
   ghost:
-    'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]',
+    'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] active:translate-y-px',
   danger:
     'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-sm',
 }

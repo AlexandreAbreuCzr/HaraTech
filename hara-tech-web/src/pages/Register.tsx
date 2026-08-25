@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth-context'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import { BrandLogo } from '../components/BrandLogo'
+import { CheckCircle2, Droplets, Sprout } from 'lucide-react'
 
 export default function Register() {
   const [name, setName] = useState('')
@@ -29,27 +30,32 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-primary)' }}>
-      <div className="hidden lg:flex w-1/2 bg-[var(--text-primary)] items-center justify-center p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-white" />
-          <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-white" />
-        </div>
-        <div className="relative text-center">
-          <BrandLogo className="w-72 mx-auto mb-8" />
-          <p className="text-lg text-stone-300 max-w-sm">
-            Comece a monitorar sua irrigação em minutos
-          </p>
+    <div className="brand-shell flex min-h-screen">
+      <div className="brand-hero relative hidden w-1/2 items-center justify-center overflow-hidden p-12 lg:flex">
+        <div className="brand-grid absolute inset-0 opacity-50" />
+        <div className="absolute -right-24 -top-24 size-96 rounded-full border border-white/10" />
+        <div className="relative max-w-md">
+          <BrandLogo className="mb-9 w-64" />
+          <p className="text-2xl font-semibold leading-tight tracking-[-0.03em] text-white">Sua irrigação organizada desde o primeiro cultivo.</p>
+          <p className="mt-3 text-sm leading-6 text-white/55">Conecte dispositivos, acompanhe o solo e planeje rotinas em um único lugar.</p>
+          <div className="mt-8 space-y-3">
+            {[
+              { icon: Droplets, text: 'Leituras e controles em tempo real' },
+              { icon: Sprout, text: 'Perfis de cultivo personalizados' },
+              { icon: CheckCircle2, text: 'Histórico confirmado pelo dispositivo' },
+            ].map((item) => <div key={item.text} className="flex items-center gap-3 text-sm text-white/70"><span className="flex size-8 items-center justify-center rounded-lg bg-white/8"><item.icon className="size-4 text-[var(--accent-leaf)]" /></span>{item.text}</div>)}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex flex-1 items-center justify-center p-6 sm:p-8">
         <div className="w-full max-w-sm animate-slide-up">
           <div className="lg:hidden flex justify-center mb-8">
             <BrandLogo compact />
           </div>
 
           <div className="mb-8">
+            <p className="brand-overline mb-2">Comece agora</p>
             <h2 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Criar conta</h2>
             <p className="text-sm text-[var(--text-secondary)] mt-1">Preencha os dados para se cadastrar</p>
           </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { culturasStore } from '../lib/store'
 import { Card } from '../components/ui/card'
@@ -7,23 +8,34 @@ import { Input } from '../components/ui/input'
 import { Modal } from '../components/ui/modal'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
-import { Sprout, Plus, Pencil, Trash2, Droplets, Gauge, Clock } from 'lucide-react'
+import { Sprout, Plus, Pencil, Trash2, Droplets, Gauge, Clock, Search } from 'lucide-react'
 import type { Cultura } from '../lib/types'
 
 const cores = ['#16a34a', '#22c55e', '#f97316', '#eab308', '#ef4444', '#a855f7', '#3b82f6', '#14b8a6']
 const icones = ['🍅', '🥬', '🥕', '🫑', '🍓', '🌽', '🌻', '🌿', '🌶️', '🧅', '🥒', '🍆']
 
 export default function Plants() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [culturas, setCulturas] = useState(culturasStore.list())
   const [editando, setEditando] = useState<Cultura | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const closeModal = () => {
+    setModalOpen(false)
+    if (searchParams.has('new')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      setSearchParams(next, { replace: true })
+    }
+  }
 
   const save = (c: Cultura) => {
     if (editando) culturasStore.update(c)
     else culturasStore.add(c)
     setCulturas(culturasStore.list())
     setEditando(null)
-    setModalOpen(false)
+    closeModal()
   }
 
   const remove = (id: string) => {
@@ -43,6 +55,8 @@ export default function Plants() {
     setModalOpen(true)
   }
 
+  const filtered = culturas.filter((cultura) => `${cultura.nome} ${cultura.descricao}`.toLowerCase().includes(search.toLowerCase()))
+
   return (
     <Layout>
       <PageHeader
@@ -55,6 +69,11 @@ export default function Plants() {
         }
       />
 
+      {culturas.length > 0 && <div className="relative mb-5 max-w-sm">
+        <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cultura…" className="h-10 w-full rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] pl-10 pr-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+      </div>}
+
       {culturas.length === 0 ? (
         <EmptyState
           icon={<Sprout className="size-6" />}
@@ -62,9 +81,11 @@ export default function Plants() {
           description="Adicione culturas para configurar a irrigação de cada tipo de planta"
           action={<Button onClick={openNew} icon={<Plus />}>Nova Cultura</Button>}
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={<Search className="size-6" />} title="Nenhuma cultura encontrada" description="Tente buscar por outro nome ou descrição." />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {culturas.map((c, idx) => (
+          {filtered.map((c, idx) => (
             <Card key={c.id} className="animate-slide-up" style={{ animationDelay: `${idx * 50}ms` }}>
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -124,8 +145,8 @@ export default function Plants() {
 
       {/* Form Modal */}
       <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        open={modalOpen || searchParams.get('new') === '1'}
+        onClose={closeModal}
         title={editando ? 'Editar Cultura' : 'Nova Cultura'}
       >
         <CulturaForm cultura={editando} onSave={save} />

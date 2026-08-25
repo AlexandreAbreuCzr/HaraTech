@@ -118,7 +118,7 @@ export default function DeviceDetail() {
   if (loading) {
     return (
       <Layout>
-        <div className="space-y-6 max-w-4xl">
+        <div className="max-w-6xl space-y-6">
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-10 w-64" />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -133,7 +133,7 @@ export default function DeviceDetail() {
 
   return (
     <Layout>
-      <div className="max-w-4xl space-y-6">
+      <div className="max-w-6xl space-y-6">
         {error && (
           <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
             {error}
@@ -207,7 +207,7 @@ export default function DeviceDetail() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => sendCmd('RESTART')}
+              onClick={() => { if (window.confirm('Reiniciar este dispositivo agora?')) void sendCmd('RESTART') }}
               disabled={sending !== null}
               icon={<RefreshCw />}
             >

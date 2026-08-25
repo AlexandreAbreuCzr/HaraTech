@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { programacoesStore, culturasStore } from '../lib/store'
 import { api } from '../lib/api'
@@ -16,8 +17,10 @@ const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const DIAS_COMPLETO = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
 export default function Schedules() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [programacoes, setProgramacoes] = useState(programacoesStore.list())
   const [showForm, setShowForm] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'active' | 'paused'>('all')
 
   const refresh = () => setProgramacoes(programacoesStore.list())
 
@@ -27,11 +30,21 @@ export default function Schedules() {
   }
 
   const remove = (id: string) => {
+    if (!window.confirm('Remover esta programação?')) return
     programacoesStore.remove(id)
     refresh()
   }
 
   const ativas = programacoes.filter(p => p.ativo).length
+  const visiblePlans = programacoes.filter((plan) => filter === 'all' || (filter === 'active' ? plan.ativo : !plan.ativo))
+  const closeForm = () => {
+    setShowForm(false)
+    if (searchParams.has('new')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      setSearchParams(next, { replace: true })
+    }
+  }
 
   return (
     <Layout>
@@ -45,6 +58,14 @@ export default function Schedules() {
         }
       />
 
+      {programacoes.length > 0 && <div className="mb-5 flex w-fit rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-1">
+        {([
+          { value: 'all', label: `Todas ${programacoes.length}` },
+          { value: 'active', label: `Ativas ${ativas}` },
+          { value: 'paused', label: `Pausadas ${programacoes.length - ativas}` },
+        ] as const).map((item) => <button key={item.value} onClick={() => setFilter(item.value)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filter === item.value ? 'bg-[var(--ink)] text-white shadow-sm' : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'}`}>{item.label}</button>)}
+      </div>}
+
       {programacoes.length === 0 ? (
         <EmptyState
           icon={<CalendarClock className="size-6" />}
@@ -56,17 +77,19 @@ export default function Schedules() {
             </Button>
           }
         />
+      ) : visiblePlans.length === 0 ? (
+        <EmptyState icon={<CalendarClock className="size-6" />} title="Nenhuma rotina neste filtro" description="Escolha outro status para ver suas programações." />
       ) : (
         <div className="space-y-3">
-          {programacoes.map((p, idx) => (
+          {visiblePlans.map((p, idx) => (
             <Card key={p.id} className="animate-slide-up" style={{ animationDelay: `${idx * 50}ms` }}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                   <div className={`size-2.5 rounded-full ${p.ativo ? 'bg-emerald-500 shadow-sm shadow-emerald-500/30' : 'bg-[var(--text-tertiary)]'}`} />
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
                     <Sprout className="size-4 text-brand-500" />
-                    <span className="font-medium text-[var(--text-primary)]">{p.culturaNome}</span>
-                    <span className="text-sm text-[var(--text-tertiary)]">— {p.zonaNome}</span>
+                    <span className="truncate font-medium text-[var(--text-primary)]">{p.culturaNome}</span>
+                    <span className="hidden text-sm text-[var(--text-tertiary)] md:inline">— {p.zonaNome}</span>
                   </div>
                   <div className="hidden sm:flex items-center gap-3 text-xs text-[var(--text-tertiary)]">
                     <span className="flex items-center gap-1">
@@ -103,7 +126,7 @@ export default function Schedules() {
         </div>
       )}
 
-      {showForm && <ScheduleForm onClose={() => setShowForm(false)} onSave={() => { refresh(); setShowForm(false) }} />}
+      {(showForm || searchParams.get('new') === '1') && <ScheduleForm onClose={closeForm} onSave={() => { refresh(); closeForm() }} />}
     </Layout>
   )
 }
