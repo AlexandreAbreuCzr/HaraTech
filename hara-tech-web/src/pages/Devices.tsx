@@ -17,8 +17,8 @@ import type { Device } from '../lib/types'
 
 function statusColor(isOnline: boolean) {
   return isOnline
-    ? 'bg-emerald-500 shadow-sm shadow-emerald-500/30'
-    : 'bg-zinc-400 dark:bg-zinc-600'
+    ? 'bg-black'
+    : 'bg-[#b5b5b5]'
 }
 
 export default function Devices() {
@@ -84,7 +84,7 @@ export default function Devices() {
       />
 
       {/* Link device card */}
-      <Card className="mb-5 animate-slide-up">
+      <Card className="mb-7 animate-slide-up">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
           <div className="lg:max-w-sm lg:flex-1">
             <CardTitle>Vincular dispositivo</CardTitle>
@@ -113,20 +113,20 @@ export default function Devices() {
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar dispositivo…" className="h-10 w-full rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] pl-10 pr-4 text-sm text-[var(--text-primary)] outline-none transition-all placeholder:text-[var(--text-tertiary)] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar dispositivo…" className="h-10 w-full rounded-lg border border-[var(--border-primary)] bg-white pl-10 pr-4 text-sm text-black outline-none placeholder:text-[var(--text-tertiary)] focus:border-black" />
         </div>
-        <div className="flex rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-1">
+        <div className="flex rounded-lg border border-[var(--border-primary)] bg-white p-1">
           {([
             { value: 'all', label: 'Todos', icon: HardDrive },
             { value: 'online', label: 'Online', icon: Wifi },
             { value: 'offline', label: 'Offline', icon: WifiOff },
-          ] as const).map(item => <button key={item.value} onClick={() => setStatusFilter(item.value)} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${statusFilter === item.value ? 'bg-[var(--ink)] text-white shadow-sm' : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'}`}><item.icon className="size-3.5" />{item.label}</button>)}
+          ] as const).map(item => <button key={item.value} onClick={() => setStatusFilter(item.value)} className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${statusFilter === item.value ? 'bg-black text-white' : 'text-[var(--text-tertiary)] hover:text-black'}`}><item.icon className="size-3.5" />{item.label}</button>)}
         </div>
       </div>
 
       {/* Device list */}
       {loading ? (
-        <div className="space-y-3">
+        <div className="border-t border-[var(--border-primary)]">
           {[...Array(3)].map((_, i) => (
             <Skeleton key={i} className="h-20" />
           ))}
@@ -143,7 +143,7 @@ export default function Devices() {
             <button
               key={d.id}
               onClick={() => navigate(`/dispositivos/${d.deviceId}`)}
-              className="group flex w-full items-center justify-between rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-4 text-left shadow-sm transition-all duration-150 hover:-translate-y-px hover:border-brand-500/45 hover:shadow-md animate-slide-up sm:p-5"
+              className="group flex w-full items-center justify-between border-b border-[var(--border-primary)] bg-transparent px-2 py-5 text-left transition-colors hover:bg-[#f5f5f5] animate-slide-up"
               style={{ animationDelay: `${idx * 50}ms` }}
             >
               <div className="flex items-center gap-4">

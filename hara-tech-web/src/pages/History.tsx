@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Layout from '../components/Layout'
 import { api, ApiError } from '../lib/api'
-import { Card } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
@@ -86,10 +85,10 @@ export default function History() {
           <button
             key={item.value}
             onClick={() => setFilter(item.value)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap cursor-pointer
+            className={`cursor-pointer whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors
               ${filter === item.value
-                ? 'bg-brand-600 text-white shadow-sm'
-                : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] border border-[var(--border-primary)] hover:bg-[var(--bg-tertiary)]'
+                ? 'bg-black text-white'
+                : 'border border-[var(--border-primary)] bg-white text-[var(--text-secondary)] hover:border-black hover:text-black'
               }`}
           >
             {item.label}
@@ -98,7 +97,7 @@ export default function History() {
       </div>
 
       {loading ? (
-        <div className="space-y-2">
+        <div className="border-t border-[var(--border-primary)]">
           {[...Array(4)].map((_, index) => <Skeleton key={index} className="h-20" />)}
         </div>
       ) : filtered.length === 0 ? (
@@ -112,10 +111,10 @@ export default function History() {
           {filtered.map((log, index) => {
             const isCompleted = Boolean(log.endedAt)
             return (
-              <Card key={log.id} className="animate-slide-up" style={{ animationDelay: `${index * 30}ms` }}>
+              <div key={log.id} className="border-b border-[var(--border-primary)] px-2 py-5 animate-slide-up" style={{ animationDelay: `${index * 30}ms` }}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className={`size-9 shrink-0 rounded-xl flex items-center justify-center ${isCompleted ? 'bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>
+                    <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg border ${isCompleted ? 'border-black text-black' : 'border-[var(--border-primary)] text-[var(--text-secondary)]'}`}>
                       {isCompleted ? <CheckCircle2 className="size-4" /> : <Clock3 className="size-4" />}
                     </div>
                     <div className="min-w-0">
@@ -131,7 +130,7 @@ export default function History() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 pl-13 sm:pl-0">
-                    <span className="text-sm font-medium text-[var(--accent-water)] flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-sm font-medium text-black">
                       <Droplets className="size-3.5" /> {formatDuration(log.durationSeconds)}
                     </span>
                     <Badge variant={isCompleted ? 'success' : 'warning'}>
@@ -139,7 +138,7 @@ export default function History() {
                     </Badge>
                   </div>
                 </div>
-              </Card>
+              </div>
             )
           })}
         </div>

@@ -35,12 +35,12 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" />
+      <div className="fixed inset-0 bg-black/30 animate-fade-in" />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative w-full max-w-lg bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl shadow-xl animate-scale-in"
+        className="relative w-full max-w-lg rounded-xl border border-[var(--border-primary)] bg-white shadow-xl animate-scale-in"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)]">

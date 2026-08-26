@@ -8,14 +8,13 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="mb-7 flex flex-col gap-4 animate-fade-in sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-8 flex flex-col gap-4 animate-fade-in sm:flex-row sm:items-end sm:justify-between">
       <div className="space-y-1">
-        <p className="brand-overline mb-2">Controle Hara</p>
-        <h1 className="text-[1.75rem] font-bold leading-tight tracking-[-0.035em] text-[var(--text-primary)]">
+        <h1 className="text-3xl font-semibold leading-tight tracking-[-0.04em] text-black">
           {title}
         </h1>
         {description && (
-          <p className="text-sm text-[var(--text-secondary)]">
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">
             {description}
           </p>
         )}

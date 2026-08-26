@@ -110,9 +110,8 @@ export default function DeviceDetail() {
   }
 
   const moistureColor = (val: number, threshold: number) => {
-    if (val < threshold) return 'bg-red-500'
-    if (val < 70) return 'bg-amber-500'
-    return 'bg-[var(--accent-water)]'
+    if (val < threshold) return 'bg-[#8a8a8a]'
+    return 'bg-black'
   }
 
   if (loading) {
@@ -149,8 +148,8 @@ export default function DeviceDetail() {
 
         {/* Device header */}
         <div className="flex items-center gap-4 animate-fade-in">
-          <div className="size-12 rounded-2xl bg-brand-50 dark:bg-brand-950 flex items-center justify-center">
-            <Cpu className="size-6 text-brand-600 dark:text-brand-400" />
+          <div className="flex size-11 items-center justify-center rounded-lg border border-[var(--border-primary)] bg-white">
+            <Cpu className="size-5 text-black" />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-3">
@@ -161,7 +160,7 @@ export default function DeviceDetail() {
               title="Copiar ID"
               aria-label="Copiar ID do dispositivo"
               >
-                {copied ? <Check className="size-4 text-brand-500" /> : <Copy className="size-4" />}
+                {copied ? <Check className="size-4 text-black" /> : <Copy className="size-4" />}
               </button>
             </div>
             <p className="text-sm text-[var(--text-secondary)]">Detalhes e controle do dispositivo</p>
@@ -226,7 +225,7 @@ export default function DeviceDetail() {
               </Badge>
             </CardHeader>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="p-4 rounded-xl bg-[var(--bg-tertiary)]/40">
+              <div className="border-l border-[var(--border-primary)] pl-4 first:border-l-0 first:pl-0">
                 <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)] mb-2">
                   <Droplets className="size-3" /> Umidade
                 </div>
@@ -240,19 +239,19 @@ export default function DeviceDetail() {
                   <span className="text-xl font-bold text-[var(--text-primary)]">{telemetry.soilMoisture}%</span>
                 </div>
               </div>
-              <div className="p-4 rounded-xl bg-[var(--bg-tertiary)]/40">
+              <div className="border-l border-[var(--border-primary)] pl-4 first:border-l-0 first:pl-0">
                 <div className="text-xs text-[var(--text-tertiary)] mb-2">Bomba</div>
-                <div className={`text-xl font-bold ${telemetry.pumpOn ? 'text-amber-500' : 'text-[var(--text-tertiary)]'}`}>
+                <div className={`text-xl font-semibold ${telemetry.pumpOn ? 'text-black' : 'text-[var(--text-tertiary)]'}`}>
                   {telemetry.pumpOn ? 'Ligada' : 'Desligada'}
                 </div>
               </div>
-              <div className="p-4 rounded-xl bg-[var(--bg-tertiary)]/40">
+              <div className="border-l border-[var(--border-primary)] pl-4 first:border-l-0 first:pl-0">
                 <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)] mb-2">
                   <Wifi className="size-3" /> Sinal
                 </div>
                 <div className="text-xl font-bold text-[var(--text-primary)]">{telemetry.rssi ?? '-'} dBm</div>
               </div>
-              <div className="p-4 rounded-xl bg-[var(--bg-tertiary)]/40">
+              <div className="border-l border-[var(--border-primary)] pl-4 first:border-l-0 first:pl-0">
                 <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)] mb-2">
                   <Clock className="size-3" /> Atualizado
                 </div>
@@ -278,7 +277,7 @@ export default function DeviceDetail() {
                 { label: 'Umidade Mín', value: `${config.moistureThreshold}%` },
                 { label: 'Versão', value: `v${config.configVersion}` },
               ].map(s => (
-                <div key={s.label} className="p-3 rounded-xl bg-[var(--bg-tertiary)]/40">
+                <div key={s.label} className="border-l border-[var(--border-primary)] pl-3 first:border-l-0 first:pl-0">
                   <div className="text-xs text-[var(--text-tertiary)]">{s.label}</div>
                   <div className="text-sm font-semibold text-[var(--text-primary)] mt-0.5">{s.value}</div>
                 </div>
@@ -302,14 +301,14 @@ export default function DeviceDetail() {
               <p className="text-xs text-[var(--text-tertiary)] mt-1">Crie zonas para gerenciar a irrigação</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="border-t border-[var(--border-primary)]">
               {zones.map(z => {
                 const hasActuator = Boolean(z.actuator)
                 const isOpen = z.appliedState === 'OPEN' || (z.appliedState === 'UNKNOWN' && z.desiredState === 'OPEN')
                 return (
                 <div
                   key={z.id}
-                  className="flex items-center justify-between p-4 rounded-xl bg-[var(--bg-tertiary)]/40 hover:bg-[var(--bg-tertiary)] transition-colors"
+                  className="flex items-center justify-between border-b border-[var(--border-primary)] px-2 py-4 transition-colors hover:bg-[var(--bg-tertiary)]"
                 >
                   <div className="flex items-center gap-4">
                     <span className="text-xs font-mono text-[var(--text-tertiary)] bg-[var(--bg-secondary)] px-2 py-1 rounded-lg">#{z.index}</span>
@@ -322,7 +321,7 @@ export default function DeviceDetail() {
                         {z.actuator ? (
                           <span className="text-xs text-[var(--text-tertiary)]">GPIO {z.actuator.channel}</span>
                         ) : (
-                          <span className="text-xs text-amber-600 dark:text-amber-400">Atuador não configurado</span>
+                          <span className="text-xs text-[var(--text-tertiary)]">Atuador não configurado</span>
                         )}
                       </div>
                     </div>
@@ -383,11 +382,11 @@ export default function DeviceDetail() {
               <p className="text-sm text-[var(--text-secondary)]">Nenhum comando enviado</p>
             </div>
           ) : (
-            <div className="space-y-1 max-h-72 overflow-y-auto">
+            <div className="max-h-72 overflow-y-auto border-t border-[var(--border-primary)]">
               {commands.map(c => (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-tertiary)]/30"
+                  className="flex items-center justify-between border-b border-[var(--border-primary)] px-2 py-3"
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono font-medium text-[var(--text-primary)]">{c.type}</span>

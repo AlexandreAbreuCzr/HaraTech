@@ -20,10 +20,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={id}
           aria-invalid={Boolean(error)}
-          className={`w-full h-10 px-3.5 rounded-xl border bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none transition-all duration-150 text-sm
+          className={`h-10 w-full rounded-lg border bg-white px-3.5 text-sm text-black outline-none transition-all duration-150 placeholder:text-[var(--text-tertiary)]
             ${error
               ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
-              : 'border-[var(--border-primary)] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20'
+              : 'border-[var(--border-primary)] focus:border-black'
             }
             ${className}`}
           {...props}

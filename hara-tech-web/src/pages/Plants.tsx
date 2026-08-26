@@ -2,16 +2,14 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { culturasStore } from '../lib/store'
-import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Modal } from '../components/ui/modal'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
-import { Sprout, Plus, Pencil, Trash2, Droplets, Gauge, Clock, Search } from 'lucide-react'
+import { Sprout, Plus, Pencil, Trash2, Search } from 'lucide-react'
 import type { Cultura } from '../lib/types'
 
-const cores = ['#16a34a', '#22c55e', '#f97316', '#eab308', '#ef4444', '#a855f7', '#3b82f6', '#14b8a6']
 const icones = ['🍅', '🥬', '🥕', '🫑', '🍓', '🌽', '🌻', '🌿', '🌶️', '🧅', '🥒', '🍆']
 
 export default function Plants() {
@@ -69,9 +67,9 @@ export default function Plants() {
         }
       />
 
-      {culturas.length > 0 && <div className="relative mb-5 max-w-sm">
+      {culturas.length > 0 && <div className="relative mb-6 max-w-sm">
         <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cultura…" className="h-10 w-full rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] pl-10 pr-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cultura…" className="h-10 w-full rounded-lg border border-[var(--border-primary)] bg-white pl-10 pr-4 text-sm text-black outline-none placeholder:text-[var(--text-tertiary)] focus:border-black" />
       </div>}
 
       {culturas.length === 0 ? (
@@ -84,25 +82,16 @@ export default function Plants() {
       ) : filtered.length === 0 ? (
         <EmptyState icon={<Search className="size-6" />} title="Nenhuma cultura encontrada" description="Tente buscar por outro nome ou descrição." />
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="border-t border-[var(--border-primary)]">
           {filtered.map((c, idx) => (
-            <Card key={c.id} className="animate-slide-up" style={{ animationDelay: `${idx * 50}ms` }}>
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="size-12 rounded-2xl flex items-center justify-center text-2xl"
-                    style={{ backgroundColor: `${c.cor}15` }}
-                  >
-                    {c.icone}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-[var(--text-primary)]">{c.nome}</h3>
-                    {c.descricao && (
-                      <p className="text-xs text-[var(--text-tertiary)]">{c.descricao}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-1">
+            <div key={c.id} className="grid gap-4 border-b border-[var(--border-primary)] py-5 animate-slide-up sm:grid-cols-[1fr_auto] sm:items-center" style={{ animationDelay: `${idx * 30}ms` }}>
+              <div className="flex min-w-0 items-center gap-4">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[var(--border-primary)] bg-white text-xl">{c.icone}</span>
+                <div className="min-w-0"><h3 className="font-medium text-black">{c.nome}</h3>{c.descricao && <p className="mt-0.5 truncate text-xs text-[var(--text-tertiary)]">{c.descricao}</p>}</div>
+              </div>
+              <div className="flex items-center gap-5 pl-14 sm:pl-0">
+                <div className="hidden gap-6 text-xs sm:flex"><span><b className="font-medium text-black">{c.aguaPorRegaMl} ml</b><span className="block text-[var(--text-tertiary)]">por rega</span></span><span><b className="font-medium text-black">{c.intervaloRegaHoras} h</b><span className="block text-[var(--text-tertiary)]">intervalo</span></span><span><b className="font-medium text-black">{c.umidadeIdealMin}–{c.umidadeIdealMax}%</b><span className="block text-[var(--text-tertiary)]">umidade</span></span></div>
+                <div className="flex gap-1 border-l border-[var(--border-primary)] pl-3">
                   <button
                     onClick={() => openEdit(c)}
                     className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
@@ -121,24 +110,7 @@ export default function Plants() {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="p-3 rounded-xl bg-[var(--bg-tertiary)]/40 text-center">
-                  <Droplets className="size-4 mx-auto mb-1 text-blue-500" />
-                  <div className="text-sm font-semibold text-[var(--text-primary)]">{c.aguaPorRegaMl}ml</div>
-                  <div className="text-xs text-[var(--text-tertiary)]">por rega</div>
-                </div>
-                <div className="p-3 rounded-xl bg-[var(--bg-tertiary)]/40 text-center">
-                  <Clock className="size-4 mx-auto mb-1 text-emerald-500" />
-                  <div className="text-sm font-semibold text-[var(--text-primary)]">{c.intervaloRegaHoras}h</div>
-                  <div className="text-xs text-[var(--text-tertiary)]">intervalo</div>
-                </div>
-                <div className="p-3 rounded-xl bg-[var(--bg-tertiary)]/40 text-center">
-                  <Gauge className="size-4 mx-auto mb-1 text-violet-500" />
-                  <div className="text-sm font-semibold text-[var(--text-primary)]">{c.umidadeIdealMin}-{c.umidadeIdealMax}%</div>
-                  <div className="text-xs text-[var(--text-tertiary)]">umidade</div>
-                </div>
-              </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
@@ -163,7 +135,6 @@ function CulturaForm({ cultura, onSave }: { cultura: Cultura | null; onSave: (c:
   const [min, setMin] = useState(cultura?.umidadeIdealMin?.toString() || '')
   const [max, setMax] = useState(cultura?.umidadeIdealMax?.toString() || '')
   const [icone, setIcone] = useState(cultura?.icone || icones[0])
-  const [cor, setCor] = useState(cultura?.cor || cores[0])
   const [error, setError] = useState('')
 
   const handle = (e: React.FormEvent) => {
@@ -189,7 +160,7 @@ function CulturaForm({ cultura, onSave }: { cultura: Cultura | null; onSave: (c:
       intervaloRegaHoras: interval,
       umidadeIdealMin: minimum,
       umidadeIdealMax: maximum,
-      icone, cor,
+      icone, cor: cultura?.cor || '#111111',
     })
   }
 
@@ -211,21 +182,9 @@ function CulturaForm({ cultura, onSave }: { cultura: Cultura | null; onSave: (c:
         <div className="flex flex-wrap gap-1">
           {icones.map(i => (
             <button key={i} type="button" onClick={() => setIcone(i)}
-              className={`size-9 rounded-xl flex items-center justify-center text-lg transition-all cursor-pointer
-                ${icone === i ? 'bg-brand-600 ring-2 ring-brand-400 text-white' : 'bg-[var(--bg-tertiary)] hover:bg-[var(--border-primary)]'}`}>
+              className={`flex size-9 cursor-pointer items-center justify-center rounded-lg border text-lg transition-all ${icone === i ? 'border-black bg-black' : 'border-[var(--border-primary)] bg-white hover:border-black'}`}>
               {i}
             </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Cor</label>
-        <div className="flex flex-wrap gap-2">
-          {cores.map(c => (
-            <button key={c} type="button" onClick={() => setCor(c)}
-              className={`size-8 rounded-full transition-all cursor-pointer ${cor === c ? 'ring-2 ring-[var(--text-primary)] scale-110' : ''}`}
-              style={{ backgroundColor: c }} />
           ))}
         </div>
       </div>

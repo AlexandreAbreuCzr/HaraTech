@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { programacoesStore, culturasStore } from '../lib/store'
 import { api } from '../lib/api'
-import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Select } from '../components/ui/select'
@@ -58,12 +57,12 @@ export default function Schedules() {
         }
       />
 
-      {programacoes.length > 0 && <div className="mb-5 flex w-fit rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-1">
+      {programacoes.length > 0 && <div className="mb-6 flex w-fit rounded-lg border border-[var(--border-primary)] bg-white p-1">
         {([
           { value: 'all', label: `Todas ${programacoes.length}` },
           { value: 'active', label: `Ativas ${ativas}` },
           { value: 'paused', label: `Pausadas ${programacoes.length - ativas}` },
-        ] as const).map((item) => <button key={item.value} onClick={() => setFilter(item.value)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${filter === item.value ? 'bg-[var(--ink)] text-white shadow-sm' : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'}`}>{item.label}</button>)}
+        ] as const).map((item) => <button key={item.value} onClick={() => setFilter(item.value)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${filter === item.value ? 'bg-black text-white' : 'text-[var(--text-tertiary)] hover:text-black'}`}>{item.label}</button>)}
       </div>}
 
       {programacoes.length === 0 ? (
@@ -80,14 +79,14 @@ export default function Schedules() {
       ) : visiblePlans.length === 0 ? (
         <EmptyState icon={<CalendarClock className="size-6" />} title="Nenhuma rotina neste filtro" description="Escolha outro status para ver suas programações." />
       ) : (
-        <div className="space-y-3">
+        <div className="border-t border-[var(--border-primary)]">
           {visiblePlans.map((p, idx) => (
-            <Card key={p.id} className="animate-slide-up" style={{ animationDelay: `${idx * 50}ms` }}>
+            <div key={p.id} className="border-b border-[var(--border-primary)] px-2 py-5 animate-slide-up" style={{ animationDelay: `${idx * 30}ms` }}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                  <div className={`size-2.5 rounded-full ${p.ativo ? 'bg-emerald-500 shadow-sm shadow-emerald-500/30' : 'bg-[var(--text-tertiary)]'}`} />
+                  <div className={`size-2 rounded-full ${p.ativo ? 'bg-black' : 'bg-[#b5b5b5]'}`} />
                   <div className="flex min-w-0 items-center gap-2">
-                    <Sprout className="size-4 text-brand-500" />
+                    <Sprout className="size-4 text-black" />
                     <span className="truncate font-medium text-[var(--text-primary)]">{p.culturaNome}</span>
                     <span className="hidden text-sm text-[var(--text-tertiary)] md:inline">— {p.zonaNome}</span>
                   </div>
@@ -121,7 +120,7 @@ export default function Schedules() {
                 <span>{p.diasSemana.map(d => DIAS[d]).join(', ')}</span>
                 <span>{p.quantidadeAguaMl}ml</span>
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
@@ -198,7 +197,7 @@ function ScheduleForm({ onClose, onSave }: { onClose: () => void; onSave: () => 
   return (
     <Modal open={true} onClose={onClose} title="Nova Programação">
       <div className="space-y-4">
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        <div className="border-l-2 border-black bg-[var(--bg-tertiary)] px-3 py-2 text-xs leading-5 text-[var(--text-secondary)]">
           Este plano fica salvo neste navegador para organização. A execução automática pelo dispositivo ainda precisa ser configurada no firmware.
         </div>
         <Select label="Dispositivo" value={dispositivoId} onChange={e => setDispositivoId(e.target.value)}>
@@ -238,7 +237,7 @@ function ScheduleForm({ onClose, onSave }: { onClose: () => void; onSave: () => 
                 onClick={() => toggleDia(i)}
                 className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer
                   ${dias.includes(i)
-                    ? 'bg-brand-600 text-white shadow-sm'
+                    ? 'bg-black text-white'
                     : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] hover:bg-[var(--border-primary)]'
                   }`}
               >
@@ -249,7 +248,7 @@ function ScheduleForm({ onClose, onSave }: { onClose: () => void; onSave: () => 
         </div>
 
         {cultura && (
-          <div className="p-4 rounded-xl bg-[var(--bg-tertiary)]/40 space-y-1">
+          <div className="space-y-1 border border-[var(--border-primary)] bg-[var(--bg-tertiary)] p-4">
             <p className="text-xs text-[var(--text-tertiary)]">Essa cultura receberá</p>
             <p className="text-sm font-medium text-[var(--text-primary)]">
               {cultura.aguaPorRegaMl}ml de água {dias.length > 0 ? `às ${horario}` : ''}

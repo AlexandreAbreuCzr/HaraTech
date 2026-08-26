@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Droplets, Sprout, SunMedium } from 'lucide-react'
 import { useAuth } from '../lib/auth-context'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
@@ -14,92 +13,27 @@ export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      await login(email, password)
-      navigate('/')
-    } catch (err: any) {
-      setError(err.message || 'Erro ao entrar')
-    } finally {
-      setLoading(false)
-    }
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault(); setError(''); setLoading(true)
+    try { await login(email, password); navigate('/') }
+    catch (err: unknown) { setError(err instanceof Error ? err.message : 'Não foi possível entrar.') }
+    finally { setLoading(false) }
   }
 
   return (
-    <div className="brand-shell flex min-h-screen">
-      <div className="brand-hero relative hidden w-1/2 items-center justify-center overflow-hidden p-12 lg:flex">
-        <div className="brand-grid absolute inset-0 opacity-50" />
-        <div className="absolute -right-24 -top-24 size-96 rounded-full border border-white/10" />
-        <div className="absolute -bottom-24 -left-24 size-80 rounded-full border border-white/10" />
-        <div className="absolute right-14 top-14 flex items-center gap-2 text-xs font-semibold tracking-[0.16em] text-white/55 uppercase">
-          <span className="size-2 rounded-full bg-[var(--accent-sun)]" /> Energia inteligente
-        </div>
-        <div className="relative text-center">
-          <BrandLogo className="mx-auto mb-8 w-72" />
-          <p className="mx-auto max-w-sm text-lg text-white/70">
-            Irrigação inteligente para um futuro mais sustentável.
-          </p>
-          <div className="mt-8 flex justify-center gap-2">
-            <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/80"><SunMedium className="size-3.5 text-[var(--accent-sun)]" />Solar</span>
-            <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/80"><Droplets className="size-3.5 text-[var(--accent-water)]" />Água</span>
-            <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/80"><Sprout className="size-3.5 text-[var(--accent-leaf)]" />Cultivo</span>
-          </div>
-        </div>
+    <main className="flex min-h-screen bg-white px-6 py-10">
+      <div className="m-auto w-full max-w-[360px]">
+        <div className="mb-12"><BrandLogo compact /></div>
+        <div className="mb-8"><h1 className="text-3xl font-semibold tracking-[-0.04em] text-black">Entrar</h1><p className="mt-2 text-sm text-[var(--text-secondary)]">Acesse o painel de irrigação.</p></div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {error && <p role="alert" className="border-l-2 border-black pl-3 text-sm text-black">{error}</p>}
+          <Input label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="seu@email.com" autoComplete="email" required />
+          <Input label="Senha" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" autoComplete="current-password" required />
+          <Button type="submit" loading={loading} className="w-full">Entrar</Button>
+        </form>
+        <p className="mt-7 text-sm text-[var(--text-secondary)]">Não tem uma conta? <Link to="/register" className="font-semibold text-black underline underline-offset-4">Criar conta</Link></p>
+        <p className="mt-16 border-t border-[var(--border-primary)] pt-5 text-xs text-[var(--text-tertiary)]">Hara Tech · Irrigação inteligente</p>
       </div>
-
-      <div className="flex flex-1 items-center justify-center p-6 sm:p-8">
-        <div className="w-full max-w-sm animate-slide-up">
-          <div className="mb-8 flex justify-center lg:hidden">
-            <BrandLogo compact />
-          </div>
-
-          <div className="mb-8">
-            <p className="brand-overline mb-2">Acesso à plataforma</p>
-            <h2 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Bem-vindo de volta</h2>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">Entre com sua conta para continuar</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
-                <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
-              </div>
-            )}
-
-            <Input
-              label="Email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-              required
-            />
-
-            <Input
-              label="Senha"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-
-            <Button type="submit" loading={loading} className="w-full">
-              Entrar
-            </Button>
-
-            <p className="text-center text-sm text-[var(--text-tertiary)]">
-              Ainda não tem conta?{' '}
-              <Link to="/register" className="font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
-                Cadastrar
-              </Link>
-            </p>
-          </form>
-        </div>
-      </div>
-    </div>
+    </main>
   )
 }

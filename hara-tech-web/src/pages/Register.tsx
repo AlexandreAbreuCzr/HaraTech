@@ -4,7 +4,6 @@ import { useAuth } from '../lib/auth-context'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import { BrandLogo } from '../components/BrandLogo'
-import { CheckCircle2, Droplets, Sprout } from 'lucide-react'
 
 export default function Register() {
   const [name, setName] = useState('')
@@ -15,98 +14,28 @@ export default function Register() {
   const { register } = useAuth()
   const navigate = useNavigate()
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      await register(name, email, password)
-      navigate('/')
-    } catch (err: any) {
-      setError(err.message || 'Erro ao cadastrar')
-    } finally {
-      setLoading(false)
-    }
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault(); setError(''); setLoading(true)
+    try { await register(name, email, password); navigate('/') }
+    catch (err: unknown) { setError(err instanceof Error ? err.message : 'Não foi possível criar a conta.') }
+    finally { setLoading(false) }
   }
 
   return (
-    <div className="brand-shell flex min-h-screen">
-      <div className="brand-hero relative hidden w-1/2 items-center justify-center overflow-hidden p-12 lg:flex">
-        <div className="brand-grid absolute inset-0 opacity-50" />
-        <div className="absolute -right-24 -top-24 size-96 rounded-full border border-white/10" />
-        <div className="relative max-w-md">
-          <BrandLogo className="mb-9 w-64" />
-          <p className="text-2xl font-semibold leading-tight tracking-[-0.03em] text-white">Sua irrigação organizada desde o primeiro cultivo.</p>
-          <p className="mt-3 text-sm leading-6 text-white/55">Conecte dispositivos, acompanhe o solo e planeje rotinas em um único lugar.</p>
-          <div className="mt-8 space-y-3">
-            {[
-              { icon: Droplets, text: 'Leituras e controles em tempo real' },
-              { icon: Sprout, text: 'Perfis de cultivo personalizados' },
-              { icon: CheckCircle2, text: 'Histórico confirmado pelo dispositivo' },
-            ].map((item) => <div key={item.text} className="flex items-center gap-3 text-sm text-white/70"><span className="flex size-8 items-center justify-center rounded-lg bg-white/8"><item.icon className="size-4 text-[var(--accent-leaf)]" /></span>{item.text}</div>)}
-          </div>
-        </div>
+    <main className="flex min-h-screen bg-white px-6 py-10">
+      <div className="m-auto w-full max-w-[360px]">
+        <div className="mb-12"><BrandLogo compact /></div>
+        <div className="mb-8"><h1 className="text-3xl font-semibold tracking-[-0.04em] text-black">Criar conta</h1><p className="mt-2 text-sm text-[var(--text-secondary)]">Configure seu acesso ao painel.</p></div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {error && <p role="alert" className="border-l-2 border-black pl-3 text-sm text-black">{error}</p>}
+          <Input label="Nome" value={name} onChange={(event) => setName(event.target.value)} placeholder="Seu nome" autoComplete="name" required />
+          <Input label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="seu@email.com" autoComplete="email" required />
+          <Input label="Senha" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo de 6 caracteres" autoComplete="new-password" minLength={6} required />
+          <Button type="submit" loading={loading} className="w-full">Criar conta</Button>
+        </form>
+        <p className="mt-7 text-sm text-[var(--text-secondary)]">Já possui uma conta? <Link to="/login" className="font-semibold text-black underline underline-offset-4">Entrar</Link></p>
+        <p className="mt-16 border-t border-[var(--border-primary)] pt-5 text-xs text-[var(--text-tertiary)]">Hara Tech · Irrigação inteligente</p>
       </div>
-
-      <div className="flex flex-1 items-center justify-center p-6 sm:p-8">
-        <div className="w-full max-w-sm animate-slide-up">
-          <div className="lg:hidden flex justify-center mb-8">
-            <BrandLogo compact />
-          </div>
-
-          <div className="mb-8">
-            <p className="brand-overline mb-2">Comece agora</p>
-            <h2 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Criar conta</h2>
-            <p className="text-sm text-[var(--text-secondary)] mt-1">Preencha os dados para se cadastrar</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900">
-                <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
-              </div>
-            )}
-
-            <Input
-              label="Nome"
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Seu nome"
-              required
-            />
-
-            <Input
-              label="Email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-              required
-            />
-
-            <Input
-              label="Senha"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••"
-              required
-            />
-
-            <Button type="submit" loading={loading} className="w-full">
-              Cadastrar
-            </Button>
-
-            <p className="text-sm text-center text-[var(--text-tertiary)]">
-              Já tem conta?{' '}
-              <Link to="/login" className="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 font-medium transition-colors">
-                Entrar
-              </Link>
-            </p>
-          </form>
-        </div>
-      </div>
-    </div>
+    </main>
   )
 }

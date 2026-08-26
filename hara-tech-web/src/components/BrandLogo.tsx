@@ -10,7 +10,7 @@ export function BrandLogo({ compact = false, inverse = false, iconOnly = false, 
   if (compact) {
     return (
       <div className={`flex items-center gap-2.5 ${className}`}>
-        <div className={`brand-paper flex shrink-0 items-center justify-center overflow-hidden rounded-xl p-0.5 ${iconOnly ? 'size-10' : 'size-11'}`}>
+        <div className={`brand-paper flex shrink-0 items-center justify-center overflow-hidden rounded-lg p-0.5 ${iconOnly ? 'size-9' : 'size-10'}`}>
           <img
             src="/logo.jpeg"
             alt="Símbolo Hara Tech"
@@ -18,8 +18,8 @@ export function BrandLogo({ compact = false, inverse = false, iconOnly = false, 
           />
         </div>
         {!iconOnly && <div className="min-w-0 leading-none">
-          <p className={`text-sm font-black tracking-[0.18em] ${inverse ? 'text-white' : 'text-[var(--text-primary)]'}`}>HARA</p>
-          <p className="mt-1 text-[0.65rem] font-semibold tracking-[0.24em] text-[var(--accent-leaf)]">TECH</p>
+          <p className={`text-sm font-bold tracking-[0.16em] ${inverse ? 'text-white' : 'text-black'}`}>HARA</p>
+          <p className={`mt-1 text-[0.62rem] font-medium tracking-[0.22em] ${inverse ? 'text-white/60' : 'text-[var(--text-tertiary)]'}`}>TECH</p>
         </div>}
       </div>
     )
