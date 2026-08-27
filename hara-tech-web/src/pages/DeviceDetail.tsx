@@ -10,10 +10,11 @@ import { Skeleton } from '../components/ui/skeleton'
 import { Modal } from '../components/ui/modal'
 import {
   ArrowLeft, Power, PowerOff, RotateCcw, RefreshCw,
-  Zap, ZapOff, Trash2, Plus, Cpu, Droplets, Wifi,
-  Clock, HardDrive, Copy, Check, Settings,
+  Trash2, Plus, Cpu, Droplets, Wifi,
+  Clock, HardDrive, Copy, Check, Settings, Play, Square,
+  ChevronDown, ChevronUp,
 } from 'lucide-react'
-import type { Zone, DeviceConfig, Command, Telemetry } from '../lib/types'
+import type { Zone, DeviceConfig, Command, Telemetry, IrrigationLog } from '../lib/types'
 
 export default function DeviceDetail() {
   const { deviceId } = useParams<{ deviceId: string }>()
@@ -22,40 +23,56 @@ export default function DeviceDetail() {
   const [config, setConfig] = useState<DeviceConfig | null>(null)
   const [commands, setCommands] = useState<Command[]>([])
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null)
+  const [irrigationLogs, setIrrigationLogs] = useState<IrrigationLog[]>([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [zoneModal, setZoneModal] = useState<'new' | Zone | null>(null)
+  const [expandedZones, setExpandedZones] = useState<Set<string>>(new Set())
+  const [notice, setNotice] = useState('')
+  const [clock, setClock] = useState(() => Date.now())
   const [error, setError] = useState('')
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (showLoading = true) => {
     if (!deviceId) return
-    setLoading(true)
+    if (showLoading) setLoading(true)
     setError('')
-    const [zonesResult, configResult, commandsResult, telemetryResult] = await Promise.allSettled([
+    const [zonesResult, configResult, commandsResult, telemetryResult, logsResult] = await Promise.allSettled([
       api.zonas.listar(deviceId),
       api.config.obter(deviceId),
       api.comandos.listar(deviceId),
       api.telemetria.ultima(deviceId),
+      api.irrigacao.listarDispositivo(deviceId),
     ])
 
     if (zonesResult.status === 'fulfilled') setZones(zonesResult.value.zones)
     if (configResult.status === 'fulfilled') setConfig(configResult.value)
     if (commandsResult.status === 'fulfilled') setCommands(commandsResult.value.commands)
     if (telemetryResult.status === 'fulfilled') setTelemetry(telemetryResult.value)
+    if (logsResult.status === 'fulfilled') setIrrigationLogs(logsResult.value.logs)
 
-    const failure = [zonesResult, configResult, commandsResult, telemetryResult].find(
+    const failure = [zonesResult, configResult, commandsResult, telemetryResult, logsResult].find(
       (result) => result.status === 'rejected'
     )
     if (failure?.status === 'rejected') {
       setError(failure.reason instanceof ApiError ? failure.reason.message : 'Não foi possível atualizar todos os dados do dispositivo.')
     }
-    setLoading(false)
+    if (showLoading) setLoading(false)
   }, [deviceId])
 
   useEffect(() => {
     void fetchAll()
   }, [fetchAll])
+
+  useEffect(() => {
+    const refresh = window.setInterval(() => void fetchAll(false), 15_000)
+    return () => window.clearInterval(refresh)
+  }, [fetchAll])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const sendCmd = async (type: string, payload?: Record<string, unknown>) => {
     if (!deviceId) return
@@ -69,6 +86,50 @@ export default function DeviceDetail() {
     } finally {
       setSending(null)
     }
+  }
+
+  const controlZone = async (zone: Zone, start: boolean) => {
+    if (!deviceId) return
+    const actionKey = `${start ? 'start' : 'stop'}-${zone.id}`
+    setSending(actionKey)
+    setError('')
+    setNotice('')
+
+    try {
+      if (start) {
+        await api.comandos.criar(deviceId, { type: 'OPEN_ZONE', payload: { zoneIndex: zone.index } })
+        if (!telemetry?.pumpOn) {
+          await api.comandos.criar(deviceId, { type: 'PUMP_ON' })
+        }
+        setNotice(`Comando enviado. A rega de “${zone.name}” começará após a confirmação do dispositivo.`)
+      } else {
+        const anotherZoneIsWatering = zones.some((candidate) => {
+          if (candidate.id === zone.id) return false
+          const hasActiveLog = irrigationLogs.some((log) => log.zone?.index === candidate.index && !log.endedAt)
+          return hasActiveLog || candidate.appliedState === 'OPEN'
+        })
+
+        if (!anotherZoneIsWatering && telemetry?.pumpOn) {
+          await api.comandos.criar(deviceId, { type: 'PUMP_OFF' })
+        }
+        await api.comandos.criar(deviceId, { type: 'CLOSE_ZONE', payload: { zoneIndex: zone.index } })
+        setNotice(`Comando enviado. A rega de “${zone.name}” será encerrada pelo dispositivo.`)
+      }
+      await fetchAll(false)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível controlar esta área.')
+    } finally {
+      setSending(null)
+    }
+  }
+
+  const toggleZoneDetails = (zoneId: string) => {
+    setExpandedZones((current) => {
+      const next = new Set(current)
+      if (next.has(zoneId)) next.delete(zoneId)
+      else next.add(zoneId)
+      return next
+    })
   }
 
   const saveZone = async (input: ZoneMutation & { name: string }) => {
@@ -134,8 +195,13 @@ export default function DeviceDetail() {
     <Layout>
       <div className="max-w-6xl space-y-6">
         {error && (
-          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
+          </div>
+        )}
+        {notice && (
+          <div role="status" className="rounded-xl border border-[var(--border-primary)] bg-white px-4 py-3 text-sm text-black">
+            {notice}
           </div>
         )}
         {/* Back button */}
@@ -165,7 +231,7 @@ export default function DeviceDetail() {
             </div>
             <p className="text-sm text-[var(--text-secondary)]">Detalhes e controle do dispositivo</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={fetchAll} icon={<RefreshCw />}>
+          <Button variant="ghost" size="sm" onClick={() => void fetchAll()} icon={<RefreshCw />}>
             Atualizar
           </Button>
         </div>
@@ -173,7 +239,7 @@ export default function DeviceDetail() {
         {/* Quick controls */}
         <Card className="animate-slide-up">
           <CardHeader>
-            <CardTitle>Controles Rápidos</CardTitle>
+            <CardTitle>Controle do sistema</CardTitle>
           </CardHeader>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -287,83 +353,118 @@ export default function DeviceDetail() {
         )}
 
         {/* Zones */}
-        <Card className="animate-slide-up">
-          <CardHeader>
-            <CardTitle>Zonas de Irrigação</CardTitle>
+        <Card padding={false} className="animate-slide-up overflow-hidden">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Rega por área</CardTitle>
+              <p className="mt-1 text-xs text-[var(--text-tertiary)]">Acompanhe cada local e regue manualmente quando precisar.</p>
+            </div>
             <Button size="sm" variant="secondary" onClick={() => setZoneModal('new')} icon={<Plus />}>
-              Nova Zona
+              Nova área
             </Button>
-          </CardHeader>
+          </div>
           {zones.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <HardDrive className="size-8 text-[var(--text-tertiary)] mb-3" />
-              <p className="text-sm text-[var(--text-secondary)]">Nenhuma zona criada</p>
-              <p className="text-xs text-[var(--text-tertiary)] mt-1">Crie zonas para gerenciar a irrigação</p>
+              <p className="text-sm text-[var(--text-secondary)]">Nenhuma área criada</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1">Crie uma área para acompanhar e controlar a rega.</p>
             </div>
           ) : (
             <div className="border-t border-[var(--border-primary)]">
               {zones.map(z => {
                 const hasActuator = Boolean(z.actuator)
                 const isOpen = z.appliedState === 'OPEN' || (z.appliedState === 'UNKNOWN' && z.desiredState === 'OPEN')
+                const zoneLogs = irrigationLogs.filter((log) => log.zone?.index === z.index)
+                const activeLog = zoneLogs.find((log) => !log.endedAt)
+                const stats = getZoneStats(zoneLogs, clock)
+                const isWatering = Boolean(activeLog) || (isOpen && Boolean(telemetry?.pumpOn))
+                const hasPendingCommand = commands.some((command) =>
+                  (command.status === 'PENDING' || command.status === 'SENT') &&
+                  (command.type === 'OPEN_ZONE' || command.type === 'CLOSE_ZONE') &&
+                  command.payload?.zoneIndex === z.index
+                )
+                const actionKey = `${isWatering ? 'stop' : 'start'}-${z.id}`
+                const expanded = expandedZones.has(z.id)
+                const stateLabel = isWatering
+                  ? 'Regando agora'
+                  : hasPendingCommand
+                    ? 'Aguardando dispositivo'
+                    : isOpen
+                      ? 'Área aberta'
+                      : 'Parada'
                 return (
-                <div
-                  key={z.id}
-                  className="flex items-center justify-between border-b border-[var(--border-primary)] px-2 py-4 transition-colors hover:bg-[var(--bg-tertiary)]"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs font-mono text-[var(--text-tertiary)] bg-[var(--bg-secondary)] px-2 py-1 rounded-lg">#{z.index}</span>
-                    <div>
-                      <span className="text-sm font-medium text-[var(--text-primary)]">{z.name}</span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <Badge variant={isOpen ? 'success' : 'neutral'}>
-                          {isOpen ? 'Aberta' : 'Fechada'}
-                        </Badge>
-                        {z.actuator ? (
-                          <span className="text-xs text-[var(--text-tertiary)]">GPIO {z.actuator.channel}</span>
-                        ) : (
-                          <span className="text-xs text-[var(--text-tertiary)]">Atuador não configurado</span>
-                        )}
+                  <article key={z.id} className="border-b border-[var(--border-primary)] p-5 last:border-b-0">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-mono text-[var(--text-tertiary)]">Área {z.index + 1}</span>
+                          <Badge variant={isWatering ? 'success' : hasPendingCommand ? 'warning' : 'neutral'}>{stateLabel}</Badge>
+                        </div>
+                        <h3 className="mt-2 truncate text-lg font-semibold tracking-[-0.02em] text-black">{z.name}</h3>
+                        <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                          {activeLog
+                            ? `Iniciada ${formatRelativeTime(activeLog.startedAt, clock)} · confirmada pelo dispositivo`
+                            : stats.lastLog
+                              ? `Última rega em ${formatDateTime(stats.lastLog.startedAt)}`
+                              : 'Ainda não há regas confirmadas nesta área'}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={isWatering ? 'secondary' : 'primary'}
+                          onClick={() => void controlZone(z, !isWatering)}
+                          loading={sending === actionKey}
+                          disabled={sending !== null || !hasActuator || !z.enabled || hasPendingCommand}
+                          icon={isWatering ? <Square /> : <Play />}
+                          title={!hasActuator ? 'Configure o atuador primeiro' : undefined}
+                        >
+                          {isWatering ? 'Parar rega' : 'Iniciar rega'}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setZoneModal(z)} icon={<Settings />} title="Configurar área" aria-label={`Configurar ${z.name}`} />
+                        <Button size="sm" variant="ghost" onClick={() => void deleteZone(z)} icon={<Trash2 />} className="hover:text-red-500" title="Remover área" aria-label={`Remover ${z.name}`} />
                       </div>
                     </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => sendCmd('OPEN_ZONE', { zoneIndex: z.index })}
-                      disabled={sending !== null || !hasActuator}
-                      icon={<Zap />}
-                      title={hasActuator ? 'Abrir área' : 'Configure o atuador primeiro'}
-                      aria-label={`Abrir ${z.name}`}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => sendCmd('CLOSE_ZONE', { zoneIndex: z.index })}
-                      disabled={sending !== null || !hasActuator}
-                      icon={<ZapOff />}
-                      title={hasActuator ? 'Fechar área' : 'Configure o atuador primeiro'}
-                      aria-label={`Fechar ${z.name}`}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setZoneModal(z)}
-                      icon={<Settings />}
-                      title="Configurar área e atuador"
-                      aria-label={`Configurar ${z.name}`}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteZone(z)}
-                      icon={<Trash2 />}
-                      className="hover:text-red-500"
-                      title="Remover área"
-                      aria-label={`Remover ${z.name}`}
-                    />
-                  </div>
-                </div>
+
+                    {!hasActuator && (
+                      <button onClick={() => setZoneModal(z)} className="mt-4 text-left text-xs font-medium text-black underline underline-offset-4">
+                        Configure o GPIO do atuador para liberar a rega manual
+                      </button>
+                    )}
+
+                    <div className="mt-5 grid grid-cols-2 border-y border-[var(--border-primary)] py-4 sm:grid-cols-4">
+                      <ZoneMetric label="Agora" value={activeLog ? formatDuration(getLogDuration(activeLog, clock)) : '—'} detail={activeLog ? 'em andamento' : 'sem rega ativa'} />
+                      <ZoneMetric label="Hoje" value={formatDuration(stats.todaySeconds)} detail={`${stats.todayCount} rega${stats.todayCount === 1 ? '' : 's'}`} />
+                      <ZoneMetric label="Últimos 7 dias" value={formatDuration(stats.weekSeconds)} detail={`${stats.weekCount} rega${stats.weekCount === 1 ? '' : 's'}`} />
+                      <ZoneMetric label="Média" value={stats.averageSeconds === null ? '—' : formatDuration(stats.averageSeconds)} detail="por rega concluída" />
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-tertiary)]">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        <span>Válvula: {z.confirmedState === 'UNAVAILABLE' ? z.appliedState : z.confirmedState}</span>
+                        <span>GPIO: {z.actuator?.channel ?? 'não configurado'}</span>
+                        <span>Ângulo: {z.lastAppliedAngle === null ? '—' : `${z.lastAppliedAngle}°`}</span>
+                      </div>
+                      <button onClick={() => toggleZoneDetails(z.id)} className="inline-flex items-center gap-1 font-medium text-black">
+                        {expanded ? 'Ocultar eventos' : `Ver eventos (${zoneLogs.length})`}
+                        {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                      </button>
+                    </div>
+
+                    {expanded && (
+                      <div className="mt-4 border-t border-[var(--border-primary)] pt-2">
+                        {zoneLogs.length === 0 ? (
+                          <p className="py-3 text-xs text-[var(--text-tertiary)]">Nenhum evento confirmado pelo dispositivo.</p>
+                        ) : zoneLogs.slice(0, 5).map((log) => (
+                          <div key={log.id} className="grid grid-cols-[1fr_auto] gap-3 border-b border-[var(--border-primary)] py-3 text-xs last:border-b-0 sm:grid-cols-[1fr_120px_110px]">
+                            <span className="text-black">{formatDateTime(log.startedAt)}</span>
+                            <span className="hidden text-[var(--text-tertiary)] sm:block">{triggerLabel(log.triggeredBy)}</span>
+                            <span className="text-right font-medium text-black">{log.endedAt ? formatDuration(log.durationSeconds ?? 0) : 'Em andamento'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </article>
                 )
               })}
             </div>
@@ -424,6 +525,73 @@ export default function DeviceDetail() {
       </Modal>
     </Layout>
   )
+}
+
+function ZoneMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="border-l border-[var(--border-primary)] px-3 first:border-l-0 first:pl-0 even:border-l sm:even:border-l sm:first:pl-0">
+      <p className="text-[11px] text-[var(--text-tertiary)]">{label}</p>
+      <p className="mt-1 text-base font-semibold text-black">{value}</p>
+      <p className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">{detail}</p>
+    </div>
+  )
+}
+
+function getLogDuration(log: IrrigationLog, now: number) {
+  if (log.durationSeconds !== null) return log.durationSeconds
+  return Math.max(0, Math.floor((now - new Date(log.startedAt).getTime()) / 1_000))
+}
+
+function getZoneStats(logs: IrrigationLog[], now: number) {
+  const startOfToday = new Date(now)
+  startOfToday.setHours(0, 0, 0, 0)
+  const weekStart = now - 7 * 24 * 60 * 60 * 1_000
+  const todayLogs = logs.filter((log) => new Date(log.startedAt).getTime() >= startOfToday.getTime())
+  const weekLogs = logs.filter((log) => new Date(log.startedAt).getTime() >= weekStart)
+  const completedLogs = logs.filter((log) => log.durationSeconds !== null)
+  const completedSeconds = completedLogs.reduce((total, log) => total + (log.durationSeconds ?? 0), 0)
+
+  return {
+    lastLog: logs[0] ?? null,
+    todaySeconds: todayLogs.reduce((total, log) => total + getLogDuration(log, now), 0),
+    todayCount: todayLogs.length,
+    weekSeconds: weekLogs.reduce((total, log) => total + getLogDuration(log, now), 0),
+    weekCount: weekLogs.length,
+    averageSeconds: completedLogs.length ? Math.round(completedSeconds / completedLogs.length) : null,
+  }
+}
+
+function formatDuration(seconds: number) {
+  if (seconds < 60) return `${seconds}s`
+  const hours = Math.floor(seconds / 3_600)
+  const minutes = Math.floor((seconds % 3_600) / 60)
+  if (!hours) return `${minutes}min`
+  return minutes ? `${hours}h ${minutes}min` : `${hours}h`
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatRelativeTime(value: string, now: number) {
+  const seconds = Math.max(0, Math.floor((now - new Date(value).getTime()) / 1_000))
+  if (seconds < 60) return `há ${seconds}s`
+  if (seconds < 3_600) return `há ${Math.floor(seconds / 60)}min`
+  return `há ${Math.floor(seconds / 3_600)}h`
+}
+
+function triggerLabel(trigger: IrrigationLog['triggeredBy']) {
+  return {
+    MANUAL: 'Manual',
+    SCHEDULED: 'Programada',
+    SENSOR: 'Sensor',
+    AUTOMATION: 'Automação',
+  }[trigger]
 }
 
 function ZoneForm({

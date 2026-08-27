@@ -186,5 +186,7 @@ export const api = {
   },
   irrigacao: {
     listar: () => request<IrrigationLogListResponse>('/devices/irrigation-logs'),
+    listarDispositivo: (deviceId: string, limit = 200) =>
+      request<IrrigationLogListResponse>(`/devices/${deviceId}/irrigation-logs?limit=${limit}`),
   },
 }
