@@ -98,9 +98,7 @@ export default function DeviceDetail() {
     try {
       if (start) {
         await api.comandos.criar(deviceId, { type: 'OPEN_ZONE', payload: { zoneIndex: zone.index } })
-        if (!telemetry?.pumpOn) {
-          await api.comandos.criar(deviceId, { type: 'PUMP_ON' })
-        }
+        await api.comandos.criar(deviceId, { type: 'PUMP_ON' })
         setNotice(`Comando enviado. A rega de “${zone.name}” começará após a confirmação do dispositivo.`)
       } else {
         const anotherZoneIsWatering = zones.some((candidate) => {
@@ -109,7 +107,7 @@ export default function DeviceDetail() {
           return hasActiveLog || candidate.appliedState === 'OPEN'
         })
 
-        if (!anotherZoneIsWatering && telemetry?.pumpOn) {
+        if (!anotherZoneIsWatering) {
           await api.comandos.criar(deviceId, { type: 'PUMP_OFF' })
         }
         await api.comandos.criar(deviceId, { type: 'CLOSE_ZONE', payload: { zoneIndex: zone.index } })
