@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /register
+Disallow: /dispositivos
+Disallow: /culturas
+Disallow: /programacao
+Disallow: /historico
+
+Sitemap: https://hara-tech.vercel.app/sitemap.xml

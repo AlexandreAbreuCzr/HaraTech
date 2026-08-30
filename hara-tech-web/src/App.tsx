@@ -10,6 +10,7 @@ import DeviceDetail from './pages/DeviceDetail'
 import Plants from './pages/Plants'
 import Schedules from './pages/Schedules'
 import History from './pages/History'
+import Landing from './pages/Landing'
 import { Skeleton } from './components/ui/skeleton'
 import type { ReactNode } from 'react'
 
@@ -39,6 +40,20 @@ function Public({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+function Home() {
+  const { user, loading } = useAuth()
+  if (loading) return (
+    <div className="min-h-screen bg-white p-8">
+      <div className="mx-auto max-w-7xl space-y-5 pt-24">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-16 max-w-2xl" />
+        <Skeleton className="h-5 max-w-xl" />
+      </div>
+    </div>
+  )
+  return user ? <Dashboard /> : <Landing />
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -47,7 +62,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Public><Login /></Public>} />
             <Route path="/register" element={<Public><Register /></Public>} />
-            <Route path="/" element={<Protected><Dashboard /></Protected>} />
+            <Route path="/" element={<Home />} />
             <Route path="/dispositivos" element={<Protected><Devices /></Protected>} />
             <Route path="/dispositivos/:deviceId" element={<Protected><DeviceDetail /></Protected>} />
             <Route path="/culturas" element={<Protected><Plants /></Protected>} />

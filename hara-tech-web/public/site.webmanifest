@@ -1,0 +1,18 @@
+{
+  "name": "Hara Tech — Irrigação Inteligente",
+  "short_name": "Hara Tech",
+  "description": "Controle e programação de irrigação inteligente.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/logo.jpeg",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}
