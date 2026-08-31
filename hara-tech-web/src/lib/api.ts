@@ -144,6 +144,14 @@ interface IrrigationLogListResponse {
   total: number
 }
 
+interface DeviceStatusResponse {
+  zones: Zone[]
+  config: DeviceConfig
+  commands: Command[]
+  telemetry: Telemetry | null
+  irrigationLogs: IrrigationLog[]
+}
+
 export interface ZoneMutation {
   name?: string
   index?: number
@@ -163,6 +171,8 @@ export const api = {
     listar: () => request<DeviceListResponse>('/devices'),
     vincular: (deviceId: string) =>
       request<Device>('/devices/link', { method: 'POST', body: JSON.stringify({ deviceId }) }),
+    status: (deviceId: string) =>
+      request<DeviceStatusResponse>(`/devices/${deviceId}/status`),
   },
   zonas: {
     listar: (deviceId: string) => request<ZoneListResponse>(`/devices/${deviceId}/zones`),

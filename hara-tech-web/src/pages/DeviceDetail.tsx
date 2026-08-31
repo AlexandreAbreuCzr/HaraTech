@@ -44,27 +44,18 @@ export default function DeviceDetail() {
     if (!deviceId) return
     if (showLoading) setLoading(true)
     setError('')
-    const [zonesResult, configResult, commandsResult, telemetryResult, logsResult] = await Promise.allSettled([
-      api.zonas.listar(deviceId),
-      api.config.obter(deviceId),
-      api.comandos.listar(deviceId),
-      api.telemetria.ultima(deviceId),
-      api.irrigacao.listarDispositivo(deviceId),
-    ])
-
-    if (zonesResult.status === 'fulfilled') setZones(zonesResult.value.zones)
-    if (configResult.status === 'fulfilled') setConfig(configResult.value)
-    if (commandsResult.status === 'fulfilled') setCommands(commandsResult.value.commands)
-    if (telemetryResult.status === 'fulfilled') setTelemetry(telemetryResult.value)
-    if (logsResult.status === 'fulfilled') setIrrigationLogs(logsResult.value.logs)
-
-    const failure = [zonesResult, configResult, commandsResult, telemetryResult, logsResult].find(
-      (result) => result.status === 'rejected'
-    )
-    if (failure?.status === 'rejected') {
-      setError(failure.reason instanceof ApiError ? failure.reason.message : 'Não foi possível atualizar todos os dados do dispositivo.')
+    try {
+      const status = await api.dispositivos.status(deviceId)
+      setZones(status.zones)
+      setConfig(status.config)
+      setCommands(status.commands)
+      setTelemetry(status.telemetry)
+      setIrrigationLogs(status.irrigationLogs)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível atualizar os dados do dispositivo.')
+    } finally {
+      if (showLoading) setLoading(false)
     }
-    if (showLoading) setLoading(false)
   }, [deviceId])
 
   useEffect(() => {
@@ -72,7 +63,7 @@ export default function DeviceDetail() {
   }, [fetchAll])
 
   useEffect(() => {
-    const refresh = window.setInterval(() => void fetchAll(false), 3_000)
+    const refresh = window.setInterval(() => void fetchAll(false), 5_000)
     return () => window.clearInterval(refresh)
   }, [fetchAll])
 

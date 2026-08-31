@@ -20,15 +20,24 @@ app.use((_req, res, next) => {
   next();
 });
 
+function isAuthenticatedDeviceRequest(req: express.Request) {
+  const devicePath = /\/devices\/(?:register|[^/]+\/(?:heartbeat|config|telemetry|commands\/pending|commands\/[^/]+\/ack))$/;
+  const hasDeviceCredential = Boolean(
+    req.header('x-device-token') || req.header('x-provisioning-secret')
+  );
+  return hasDeviceCredential && devicePath.test(req.path);
+}
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 600,
   message: {
     success: false,
     error: { code: 'RATE_LIMIT', message: 'Muitas requisicoes, tente novamente mais tarde.' },
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: isAuthenticatedDeviceRequest,
 });
 
 app.use(globalLimiter);

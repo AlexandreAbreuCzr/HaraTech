@@ -35,23 +35,36 @@ import {
   getDeviceIrrigationLogsHandler,
   getIrrigationLogsHandler,
 } from '../controllers/irrigation.controller';
+import { getDeviceStatusHandler } from '../controllers/device-status.controller';
 
 const router = Router();
 
+const provisioningLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: {
+    success: false,
+    error: { code: 'RATE_LIMIT', message: 'Muitas tentativas de registro, aguarde.' },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const esp32Limiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 60,
+  max: 120,
   message: {
     success: false,
     error: { code: 'RATE_LIMIT', message: 'Muitas requisicoes do dispositivo, aguarde.' },
   },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => req.params.deviceId?.trim().toUpperCase() || 'unknown-device',
 });
 
 router.post(
   '/register',
-  esp32Limiter,
+  provisioningLimiter,
   authenticateDeviceProvisioning,
   registerDeviceHandler
 );
@@ -91,6 +104,7 @@ router.use(authenticate);
 router.post('/link', linkDeviceHandler);
 router.get('/', getUserDevicesHandler);
 router.get('/irrigation-logs', getIrrigationLogsHandler);
+router.get('/:deviceId/status', getDeviceStatusHandler);
 router.post('/:deviceId/zones', createZoneHandler);
 router.get('/:deviceId/zones', listZonesHandler);
 router.patch('/:deviceId/zones/:zoneId', updateZoneHandler);
