@@ -3,6 +3,9 @@ import { AppError } from '../utils/AppError';
 import { Prisma } from '@prisma/client';
 import { getOwnedDevice } from '../utils/deviceOwnership';
 
+const MAX_TELEMETRY_INTERVAL_SECONDS = 5;
+const MAX_CONFIG_SYNC_INTERVAL_SECONDS = 10;
+
 export interface ZoneActuatorConfig {
   type: string;
   driver: string;
@@ -100,8 +103,14 @@ export async function getDeviceConfig(
     operationMode: device.config.operationMode,
     moistureThreshold: device.config.moistureThreshold,
     heartbeatIntervalSeconds: device.config.heartbeatIntervalSeconds,
-    telemetryIntervalSeconds: device.config.telemetryIntervalSeconds,
-    configSyncIntervalSeconds: device.config.configSyncIntervalSeconds,
+    telemetryIntervalSeconds: Math.min(
+      device.config.telemetryIntervalSeconds,
+      MAX_TELEMETRY_INTERVAL_SECONDS
+    ),
+    configSyncIntervalSeconds: Math.min(
+      device.config.configSyncIntervalSeconds,
+      MAX_CONFIG_SYNC_INTERVAL_SECONDS
+    ),
     pumpMode: device.config.pumpMode,
     maxSimultaneousZones: device.config.maxSimultaneousZones,
     zones: device.zones.map((zone) => ({

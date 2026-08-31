@@ -74,8 +74,8 @@ model DeviceConfig {
   operationMode             DeviceOperationMode @default(AUTO)
   moistureThreshold         Int                 @default(35)
   heartbeatIntervalSeconds  Int                 @default(60)
-  telemetryIntervalSeconds  Int                 @default(60)
-  configSyncIntervalSeconds Int                 @default(300)
+  telemetryIntervalSeconds  Int                 @default(5)
+  configSyncIntervalSeconds Int                 @default(10)
   pumpMode                  PumpMode            @default(AUTO)
   maxSimultaneousZones      Int?
   configVersion             Int                 @default(1)

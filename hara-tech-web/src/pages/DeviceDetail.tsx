@@ -72,7 +72,7 @@ export default function DeviceDetail() {
   }, [fetchAll])
 
   useEffect(() => {
-    const refresh = window.setInterval(() => void fetchAll(false), 15_000)
+    const refresh = window.setInterval(() => void fetchAll(false), 3_000)
     return () => window.clearInterval(refresh)
   }, [fetchAll])
 

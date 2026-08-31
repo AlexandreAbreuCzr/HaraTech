@@ -39,6 +39,8 @@ Sistema IoT para irrigação automatizada com ESP32, API REST e dashboard web.
 - Validação da pinagem oficial e compatibilidade com Arduino-ESP32 2.x/3.x
 - Sincronização remota de configuração
 - Execução de comandos remotos
+- Busca de comandos a cada 2 segundos para resposta rápida da bomba e dos registros
+- Telemetria a cada 5 segundos e sincronização de configuração a cada 10 segundos
 - Display LCD 16x2
 
 ### Frontend

@@ -174,6 +174,8 @@ reservatório → bomba → distribuidor
 
 No modo automático, cada sensor decide somente o estado do registro da própria área. A bomba liga apenas depois que ao menos um registro configurado terminou de abrir, e desliga quando nenhum registro precisa permanecer aberto.
 
+O ESP32 consulta novos comandos a cada 2 segundos. Ao iniciar uma rega manual, primeiro abre o registro da área e liga a bomba imediatamente após a confirmação mecânica do servo; esse pequeno intervalo é uma proteção para a bomba não trabalhar com todas as linhas fechadas.
+
 ## 7. Configuração no painel
 
 1. Abra o dispositivo e clique em **Nova área**.
