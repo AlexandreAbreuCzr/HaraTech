@@ -147,15 +147,15 @@ FILOSOFIA DO PROJETO
 
 DIFERENCIAIS DE DESIGN
 ----------------------
-- Modelagem genérica de atuadores: type + driver + channel permite servo, relé,
-  válvula, PCA9685 sem mudar schema
+- A caixa Hara Tech possui 3 saídas fixas; o usuário escolhe somente Saída 1, 2 ou 3
+- Cada saída associa uma área ao seu sensor de umidade e ao servo do registro
 - 3 estados por zona: desiredState (intenção da API), appliedState (tentativa do ESP32),
   confirmedState (reservado para sensores futuros)
-- Zonas dinâmicas: sem limite fixo, suporta 1 a 100+ zonas,
-  cada zona com seu próprio servo, sensor, configurações e estado
+- Cada dispositivo Hara Tech suporta de 1 a 3 áreas, conforme as saídas configuradas
+- Saídas sem área ficam desativadas no firmware; não recebem PWM nem entram na telemetria
 - isOnline calculado dinamicamente baseado em lastSeen + janela configurável
 - Rotação automática de token: ESP32 tenta re-registrar se heartbeat retornar 401
-- Número de zonas dinâmico por dispositivo
+- Número de áreas configuradas por dispositivo limitado às 3 saídas físicas da caixa
 - Arquitetura preparada para expansão: irrigação é apenas a primeira aplicação
 
 ESCALABILIDADE

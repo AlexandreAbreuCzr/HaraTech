@@ -6,11 +6,12 @@ import { processTelemetry, getLatestTelemetry } from '../services/telemetry.serv
 import { sendSuccess } from '../utils/response';
 
 const telemetryZoneSchema = z.object({
-  zoneIndex: z.number().int().min(0).max(255),
+  zoneIndex: z.number().int().min(0).max(2),
   desiredState: z.enum(['OPEN', 'CLOSED']).optional(),
   appliedState: z.enum(['OPEN', 'CLOSED', 'UNKNOWN']).optional(),
   confirmedState: z.enum(['OPEN', 'CLOSED', 'UNKNOWN', 'UNAVAILABLE']).optional(),
   servoAngle: z.number().int().min(0).max(180).optional(),
+  soilMoisture: z.number().int().min(0).max(100).optional(),
 });
 
 const telemetrySchema = z.object({
@@ -23,7 +24,7 @@ const telemetrySchema = z.object({
   firmwareVersion: z.string().max(32).optional(),
   zones: z
     .array(telemetryZoneSchema)
-    .max(255)
+    .max(3)
     .refine(
       (zones) => new Set(zones.map((zone) => zone.zoneIndex)).size === zones.length,
       { message: 'zoneIndex nao pode se repetir na mesma telemetria' }

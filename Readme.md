@@ -7,7 +7,8 @@ Sistema IoT para irrigação automatizada com ESP32, API REST e dashboard web.
 ```
 /
 ├── esp32codes/          # Firmware do Dispositivo Hara (ESP32)
-│   └── initial.ino
+│   └── initial/
+│       └── initial.ino
 ├── hara-tech-api/       # Backend (Node.js + TypeScript + Express + Prisma)
 ├── hara-tech-web/       # Frontend Web (React + Vite + Tailwind)
 ├── circuito.md          # Guia de montagem do hardware
@@ -31,8 +32,11 @@ Sistema IoT para irrigação automatizada com ESP32, API REST e dashboard web.
 - Registro automático na API
 - Heartbeat periódico com IP e RSSI
 - Controle local da bomba (automático com histerese)
-- Leitura de sensor de umidade do solo
-- Controle de servos por zona (PWM)
+- Leitura independente dos três sensores de umidade, um por área
+- Três saídas físicas fixas, cada uma com sensor e servo do registro
+- Controle suave e progressivo dos três servos (PWM)
+- Confirmação de comando somente após o servo atingir o ângulo solicitado
+- Validação da pinagem oficial e compatibilidade com Arduino-ESP32 2.x/3.x
 - Sincronização remota de configuração
 - Execução de comandos remotos
 - Display LCD 16x2
@@ -64,7 +68,24 @@ npm run dev
 ```
 
 ### Firmware
-Abra `esp32codes/initial.ino` na Arduino IDE, configure `API_URL` e `PROVISIONING_SECRET`, compile e envie para o ESP32.
+Abra `esp32codes/initial/initial.ino` na Arduino IDE, selecione a placa **NodeMCU-32S**, configure `API_URL` e `PROVISIONING_SECRET`, compile e envie para o ESP32.
+
+Bibliotecas necessárias:
+
+- ESP32 by Espressif Systems 3.x (o firmware também possui compatibilidade com 2.x)
+- ArduinoJson 7.x
+- WiFiManager 2.0.17 ou compatível
+- LiquidCrystal
+
+No painel não se informa GPIO. Escolha somente a saída gravada na caixa:
+
+| Saída | Servo | Sensor AO |
+|---:|---:|---:|
+| 1 | GPIO 13 | GPIO 34 |
+| 2 | GPIO 14 | GPIO 35 |
+| 3 | GPIO 25 | GPIO 36 |
+
+Cada saída pode pertencer a uma única área. Saídas sem área permanecem sem comando PWM e fora da telemetria por área.
 
 ## Montagem do Hardware
 Veja o guia completo em [`circuito.md`](circuito.md).
@@ -73,4 +94,4 @@ Veja o guia completo em [`circuito.md`](circuito.md).
 - **Backend:** Node.js, TypeScript, Express, Prisma, PostgreSQL, JWT, Zod
 - **Firmware:** Arduino Framework (C++), WiFiManager, ArduinoJson, LiquidCrystal
 - **Frontend:** React, Vite, Tailwind CSS, Lucide Icons
-- **Hardware:** ESP32, sensor de umidade, bomba d'água, servos, LCD 16x2
+- **Hardware:** ESP32, três sensores de umidade, bomba d'água, três servos de registro, LCD 16x2

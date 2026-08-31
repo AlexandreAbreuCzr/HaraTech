@@ -8,6 +8,12 @@ import {
   deleteZone,
 } from '../services/zone.service';
 import { sendSuccess, sendSuccessNoContent } from '../utils/response';
+import {
+  HARA_PORT_MAPPING_MESSAGE,
+  HARA_SERVO_GPIO_MESSAGE,
+  isHaraPortMapping,
+  isHaraServoGpio,
+} from '../utils/hardware';
 
 const deviceIdParamSchema = z.object({
   deviceId: z.string().trim().transform((value) => value.toUpperCase()),
@@ -18,7 +24,9 @@ const zoneIdParamSchema = deviceIdParamSchema.extend({
 });
 
 const actuatorSchema = z.object({
-  channel: z.number().int().min(0).max(39),
+  channel: z.number().int().refine(isHaraServoGpio, {
+    message: HARA_SERVO_GPIO_MESSAGE,
+  }),
   openAngle: z.number().int().min(0).max(180).optional(),
   closedAngle: z.number().int().min(0).max(180).optional(),
   minPulseUs: z.number().int().min(400).max(3000).optional(),
@@ -30,27 +38,43 @@ const actuatorSchema = z.object({
     actuator.maxPulseUs === undefined ||
     actuator.minPulseUs < actuator.maxPulseUs,
   { message: 'minPulseUs deve ser menor que maxPulseUs' }
+).refine(
+  (actuator) =>
+    actuator.openAngle === undefined ||
+    actuator.closedAngle === undefined ||
+    actuator.openAngle !== actuator.closedAngle,
+  { message: 'openAngle e closedAngle devem ser diferentes' }
 );
 
 const createZoneSchema = z.object({
   name: z.string().trim().min(2, 'Nome deve ter ao menos 2 caracteres').max(80),
-  index: z.number().int().min(0).max(255).optional(),
+  index: z.number().int().min(0).max(2),
   isActive: z.boolean().optional(),
   enabled: z.boolean().optional(),
-  actuator: actuatorSchema.optional(),
-});
+  actuator: actuatorSchema,
+}).refine(
+  (data) => isHaraPortMapping(data.index, data.actuator.channel),
+  { message: HARA_PORT_MAPPING_MESSAGE }
+);
 
 const updateZoneSchema = z
   .object({
     name: z.string().trim().min(2).max(80).optional(),
-    index: z.number().int().min(0).max(255).optional(),
+    index: z.number().int().min(0).max(2).optional(),
     isActive: z.boolean().optional(),
     enabled: z.boolean().optional(),
-    actuator: actuatorSchema.nullable().optional(),
+    actuator: actuatorSchema.optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Informe ao menos um campo para atualizar',
-  });
+  })
+  .refine(
+    (data) =>
+      data.index === undefined ||
+      data.actuator === undefined ||
+      isHaraPortMapping(data.index, data.actuator.channel),
+    { message: HARA_PORT_MAPPING_MESSAGE }
+  );
 
 export async function createZoneHandler(
   req: AuthenticatedRequest,

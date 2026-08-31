@@ -101,6 +101,7 @@ export interface TelemetryZone {
   desiredState: string | null
   appliedState: string | null
   servoAngle: number | null
+  soilMoisture: number | null
 }
 
 export interface Telemetry {

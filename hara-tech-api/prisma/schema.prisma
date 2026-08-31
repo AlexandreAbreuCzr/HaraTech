@@ -138,6 +138,7 @@ model DeviceTelemetryZone {
   appliedState   ZoneAppliedState    @default(UNKNOWN)
   confirmedState ZoneConfirmedState  @default(UNAVAILABLE)
   servoAngle     Int?
+  soilMoisture   Int?
   createdAt      DateTime            @default(now())
 
   telemetryId String

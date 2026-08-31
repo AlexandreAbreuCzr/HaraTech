@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../utils/AppError';
 import { getOwnedDevice } from '../utils/deviceOwnership';
+import { isHaraPortMapping } from '../utils/hardware';
 import { bumpDeviceConfigVersion } from './config.service';
 
 export interface ZoneActuatorInput {
@@ -15,10 +16,10 @@ export interface ZoneActuatorInput {
 
 export interface CreateZoneInput {
   name: string;
-  index?: number;
+  index: number;
   isActive?: boolean;
   enabled?: boolean;
-  actuator?: ZoneActuatorInput;
+  actuator: ZoneActuatorInput;
 }
 
 export interface UpdateZoneInput {
@@ -26,7 +27,7 @@ export interface UpdateZoneInput {
   index?: number;
   isActive?: boolean;
   enabled?: boolean;
-  actuator?: ZoneActuatorInput | null;
+  actuator?: ZoneActuatorInput;
 }
 
 const zoneSelect = {
@@ -55,15 +56,6 @@ const zoneSelect = {
     },
   },
 } satisfies Prisma.ZoneSelect;
-
-async function getNextZoneIndex(deviceInternalId: string) {
-  const result = await prisma.zone.aggregate({
-    where: { deviceId: deviceInternalId },
-    _max: { index: true },
-  });
-
-  return (result._max.index ?? -1) + 1;
-}
 
 async function ensureZoneIndexAvailable(
   deviceInternalId: string,
@@ -109,7 +101,7 @@ function rethrowZoneConstraint(error: unknown): never {
   }
 
   if (isActuatorChannelConflict(error)) {
-    throw new AppError('Este GPIO ja esta configurado em outra area', 409);
+    throw new AppError('Esta saida ja esta configurada em outra area', 409);
   }
 
   throw error;
@@ -162,30 +154,16 @@ export async function createZone(
   input: CreateZoneInput
 ) {
   const device = await getOwnedDevice(userId, deviceId);
-
-  if (input.index !== undefined) {
-    await ensureZoneIndexAvailable(device.id, input.index);
-
-    try {
-      return await createZoneWithIndex(device.id, input, input.index);
-    } catch (err) {
-      return rethrowZoneConstraint(err);
-    }
+  if (!isHaraPortMapping(input.index, input.actuator.channel)) {
+    throw new AppError('Saida fisica invalida para o Hara Tech', 422);
   }
+  await ensureZoneIndexAvailable(device.id, input.index);
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const nextIndex = await getNextZoneIndex(device.id);
-
-    try {
-      return await createZoneWithIndex(device.id, input, nextIndex);
-    } catch (err) {
-      if (!isZoneIndexConflict(err)) {
-        return rethrowZoneConstraint(err);
-      }
-    }
+  try {
+    return await createZoneWithIndex(device.id, input, input.index);
+  } catch (err) {
+    return rethrowZoneConstraint(err);
   }
-
-  throw new AppError('Nao foi possivel gerar um indice livre para a area', 409);
 }
 
 export async function listZones(userId: string, deviceId: string) {
@@ -208,7 +186,11 @@ export async function updateZone(
 
   const zone = await prisma.zone.findFirst({
     where: { id: zoneId, deviceId: device.id },
-    select: { id: true },
+    select: {
+      id: true,
+      index: true,
+      actuator: { select: { channel: true } },
+    },
   });
 
   if (!zone) {
@@ -220,6 +202,13 @@ export async function updateZone(
   }
 
   const { actuator, isActive, ...zoneChanges } = input;
+  if (input.index !== undefined || actuator !== undefined) {
+    const nextIndex = input.index ?? zone.index;
+    const nextChannel = actuator?.channel ?? zone.actuator?.channel;
+    if (nextChannel !== undefined && !isHaraPortMapping(nextIndex, nextChannel)) {
+      throw new AppError('Saida fisica invalida para o Hara Tech', 422);
+    }
+  }
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -236,9 +225,7 @@ export async function updateZone(
         },
       });
 
-      if (actuator === null) {
-        await tx.zoneActuator.deleteMany({ where: { zoneId } });
-      } else if (actuator) {
+      if (actuator) {
         await tx.zoneActuator.upsert({
           where: { zoneId },
           update: actuator,

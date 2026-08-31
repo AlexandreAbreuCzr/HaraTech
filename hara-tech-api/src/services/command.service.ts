@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../utils/AppError';
 import { getOwnedDevice } from '../utils/deviceOwnership';
+import { isHaraPortMapping } from '../utils/hardware';
 import { bumpDeviceConfigVersion } from './config.service';
 import { recordIrrigationCommand } from './irrigation.service';
 
@@ -35,7 +36,7 @@ export interface CreateCommandInput {
 
 function getZoneIndex(payload?: Record<string, unknown>): number {
   const zoneIndex = payload?.zoneIndex;
-  if (!Number.isInteger(zoneIndex) || (zoneIndex as number) < 0) {
+  if (!Number.isInteger(zoneIndex) || (zoneIndex as number) < 0 || (zoneIndex as number) > 2) {
     throw new AppError('zoneIndex valido e obrigatorio para este comando', 422);
   }
 
@@ -54,7 +55,7 @@ export async function createCommand(
       const zoneIndex = getZoneIndex(input.payload);
       const zone = await tx.zone.findFirst({
         where: { deviceId: device.id, index: zoneIndex },
-        select: { id: true, actuator: { select: { id: true } } },
+        select: { id: true, index: true, actuator: { select: { id: true, channel: true } } },
       });
 
       if (!zone) {
@@ -63,6 +64,10 @@ export async function createCommand(
 
       if (!zone.actuator) {
         throw new AppError('Configure o atuador da area antes de controla-la', 409);
+      }
+
+      if (!isHaraPortMapping(zone.index, zone.actuator.channel)) {
+        throw new AppError('A area nao corresponde a uma saida fisica valida', 409);
       }
 
       const isOpening = input.type === 'OPEN_ZONE';

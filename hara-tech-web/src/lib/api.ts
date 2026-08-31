@@ -149,7 +149,7 @@ export interface ZoneMutation {
   index?: number
   isActive?: boolean
   enabled?: boolean
-  actuator?: { channel: number } & Partial<Pick<ActuatorConfig, 'openAngle' | 'closedAngle' | 'minPulseUs' | 'maxPulseUs' | 'inverted'>> | null
+  actuator?: { channel: number } & Partial<Pick<ActuatorConfig, 'openAngle' | 'closedAngle' | 'minPulseUs' | 'maxPulseUs' | 'inverted'>>
 }
 
 export const api = {
@@ -166,7 +166,7 @@ export const api = {
   },
   zonas: {
     listar: (deviceId: string) => request<ZoneListResponse>(`/devices/${deviceId}/zones`),
-    criar: (deviceId: string, body: Required<Pick<ZoneMutation, 'name'>> & ZoneMutation) =>
+    criar: (deviceId: string, body: Required<Pick<ZoneMutation, 'name' | 'index' | 'actuator'>> & ZoneMutation) =>
       request<Zone>(`/devices/${deviceId}/zones`, { method: 'POST', body: JSON.stringify(body) }),
     atualizar: (deviceId: string, zoneId: string, body: ZoneMutation) =>
       request<Zone>(`/devices/${deviceId}/zones/${zoneId}`, { method: 'PATCH', body: JSON.stringify(body) }),

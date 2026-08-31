@@ -8,7 +8,31 @@
 #include <LiquidCrystal.h>
 #include <esp_task_wdt.h>
 
-LiquidCrystal lcd(23, 22, 21, 19, 18, 5);
+// ============================================================
+// PINAGEM OFICIAL - HARA TECH / ESP32 NODEMCU-32S
+// ============================================================
+const int LCD_RS_PIN = 23;
+const int LCD_ENABLE_PIN = 22;
+const int LCD_D4_PIN = 21;
+const int LCD_D5_PIN = 19;
+const int LCD_D6_PIN = 18;
+const int LCD_D7_PIN = 5;
+const int PUMP_RELAY_PIN = 26;
+
+// Cada conector da caixa possui um sinal para servo e um sinal ADC para sensor.
+// O usuario escolhe apenas SAIDA 1, 2 ou 3; estes GPIOs nunca sao configuraveis.
+const int HARA_PORT_COUNT = 3;
+const int SERVO_GPIO_PINS[HARA_PORT_COUNT] = {13, 14, 25};
+const int SOIL_SENSOR_GPIO_PINS[HARA_PORT_COUNT] = {34, 35, 36};
+
+LiquidCrystal lcd(
+  LCD_RS_PIN,
+  LCD_ENABLE_PIN,
+  LCD_D4_PIN,
+  LCD_D5_PIN,
+  LCD_D6_PIN,
+  LCD_D7_PIN
+);
 Preferences prefs;
 WiFiClient plainClient;
 WiFiClientSecure secureClient;
@@ -27,9 +51,8 @@ WiFiClientSecure secureClient;
 // ============================================================
 // PINOS E HARDWARE
 // ============================================================
-const int SOIL_SENSOR_PIN = 34;
-const int PUMP_RELAY_PIN = 26;
-const bool PUMP_ACTIVE_HIGH = false;
+// O modulo instalado no Hara Tech e acionado quando IN recebe nivel HIGH.
+const bool PUMP_ACTIVE_HIGH = true;
 
 const int SOIL_RAW_DRY = 4095;
 const int SOIL_RAW_WET = 1200;
@@ -51,10 +74,13 @@ const unsigned long COMMAND_ACK_RETRY_DELAY_MS = 500;
 const uint16_t HTTP_TIMEOUT_MS = 10000;
 const unsigned long WDT_TIMEOUT_SEC = 30;
 
-const int MAX_ZONES = 16;
+const int MAX_ZONES = HARA_PORT_COUNT;
 const int SERVO_FREQ = 50;
 const int SERVO_RESOLUTION = 12;
 const int SERVO_PERIOD_US = 20000;
+const int SERVO_STEP_DEGREES = 1;
+const unsigned long SERVO_STEP_INTERVAL_MS = 20;
+const unsigned long SERVO_MOVE_TIMEOUT_MS = 6000;
 
 // ============================================================
 // ESTADO GLOBAL
@@ -74,12 +100,15 @@ unsigned long lastCommandPollAt = 0;
 unsigned long bootTimeMs = 0;
 
 int soilMoisture = 0;
+int zoneSoilMoisture[HARA_PORT_COUNT] = {-1, -1, -1};
+bool hasMoistureReading = false;
 int lastHttpCode = 0;
 bool pumpOn = false;
 bool apiReady = false;
 bool restartRequested = false;
 
 struct ActuatorCfg {
+  String driver;
   int channel;
   int openAngle;
   int closedAngle;
@@ -112,7 +141,16 @@ struct DeviceCfg {
 
 struct ZoneState {
   int index;
+  int gpio;
   int currentAngle;
+  int targetAngle;
+  int closedAngle;
+  int minPulseUs;
+  int maxPulseUs;
+  bool inverted;
+  bool detachWhenDone;
+  unsigned long lastMoveAt;
+  String targetState;
   String appliedState;
   bool servoAttached;
 };
@@ -324,6 +362,25 @@ bool registerDevice(bool rotateToken) {
   return apiReady;
 }
 
+bool recoverDeviceRegistration(int httpCode, const char* source) {
+  if (httpCode != 401 && httpCode != 404) {
+    return false;
+  }
+
+  Serial.printf(
+    "%s retornou HTTP %d. Apagando cadastro local antigo e registrando novamente.\n",
+    source,
+    httpCode
+  );
+  clearCredentials();
+  bool registered = registerDevice(true);
+  if (registered) {
+    Serial.printf("Novo codigo do dispositivo: %s\n", deviceId.c_str());
+    showStatus("Novo codigo", deviceId);
+  }
+  return registered;
+}
+
 void ensureDeviceRegistered() {
   if (hasDeviceCredentials()) {
     apiReady = true;
@@ -367,11 +424,7 @@ bool sendHeartbeat() {
   }
   apiReady = false;
   Serial.printf("Heartbeat falhou. HTTP %d\n", code);
-  if (code == 401) {
-    Serial.println("Token invalido. Rotacionando token do device.");
-    deviceToken = "";
-    registerDevice(true);
-  }
+  recoverDeviceRegistration(code, "Heartbeat");
   return false;
 }
 
@@ -379,10 +432,41 @@ bool sendHeartbeat() {
 // SENSORES E ATUADORES
 // ============================================================
 
-int readSoilMoisture() {
-  int raw = analogRead(SOIL_SENSOR_PIN);
+int readSoilMoisture(int gpio) {
+  int raw = analogRead(gpio);
   int percent = map(raw, SOIL_RAW_DRY, SOIL_RAW_WET, 0, 100);
   return constrain(percent, 0, 100);
+}
+
+bool isValidHaraPortIndex(int zoneIndex) {
+  return zoneIndex >= 0 && zoneIndex < HARA_PORT_COUNT;
+}
+
+bool isServoMappedToZone(int zoneIndex, int servoGpio) {
+  return isValidHaraPortIndex(zoneIndex) &&
+    SERVO_GPIO_PINS[zoneIndex] == servoGpio;
+}
+
+void readConfiguredSoilMoisture() {
+  for (int i = 0; i < HARA_PORT_COUNT; i++) {
+    zoneSoilMoisture[i] = -1;
+  }
+
+  int total = 0;
+  int readingCount = 0;
+  for (int i = 0; i < config.zoneCount; i++) {
+    int portIndex = config.zones[i].index;
+    if (!isValidHaraPortIndex(portIndex)) {
+      continue;
+    }
+    int moisture = readSoilMoisture(SOIL_SENSOR_GPIO_PINS[portIndex]);
+    zoneSoilMoisture[portIndex] = moisture;
+    total += moisture;
+    readingCount++;
+  }
+
+  hasMoistureReading = readingCount > 0;
+  soilMoisture = hasMoistureReading ? total / readingCount : 0;
 }
 
 void setPump(bool enabled) {
@@ -402,18 +486,77 @@ int pulseUsToDuty(int pulseUs) {
   return map(pulseUs, 0, SERVO_PERIOD_US, 0, (1 << SERVO_RESOLUTION) - 1);
 }
 
-void applyServoAngle(int gpio, int angle, int minPulseUs, int maxPulseUs, bool inverted) {
-  int effectiveAngle = inverted ? (180 - angle) : angle;
-  int pulseUs = angleToPulseUs(effectiveAngle, minPulseUs, maxPulseUs);
-  int duty = pulseUsToDuty(pulseUs);
-  ledcWrite(gpio, duty);
+bool attachServoPwm(int gpio, int stateIndex) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  return ledcAttach(gpio, SERVO_FREQ, SERVO_RESOLUTION);
+#else
+  double configuredFrequency = ledcSetup(stateIndex, SERVO_FREQ, SERVO_RESOLUTION);
+  if (configuredFrequency <= 0) {
+    return false;
+  }
+  ledcAttachPin(gpio, stateIndex);
+  return true;
+#endif
 }
 
-void setupZoneServo(int gpio, int minPulseUs, int maxPulseUs) {
-  ledcAttach(gpio, SERVO_FREQ, SERVO_RESOLUTION);
-  int initialPulseUs = constrain(minPulseUs, 500, 2500);
-  int initialDuty = pulseUsToDuty(initialPulseUs);
-  ledcWrite(gpio, initialDuty);
+void detachServoPwm(int gpio) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcDetach(gpio);
+#else
+  ledcDetachPin(gpio);
+#endif
+}
+
+void writeServoPwm(int gpio, int stateIndex, int duty) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWrite(gpio, duty);
+#else
+  ledcWrite(stateIndex, duty);
+#endif
+}
+
+void applyServoAngle(int stateIndex, int angle) {
+  ZoneState& state = zoneStates[stateIndex];
+  int effectiveAngle = state.inverted ? (180 - angle) : angle;
+  int pulseUs = angleToPulseUs(effectiveAngle, state.minPulseUs, state.maxPulseUs);
+  writeServoPwm(state.gpio, stateIndex, pulseUsToDuty(pulseUs));
+}
+
+void detachZoneServo(int stateIndex) {
+  ZoneState& state = zoneStates[stateIndex];
+  if (!state.servoAttached) {
+    return;
+  }
+  detachServoPwm(state.gpio);
+  state.servoAttached = false;
+  state.gpio = -1;
+}
+
+bool setupZoneServo(int stateIndex, const ActuatorCfg& actuator) {
+  ZoneState& state = zoneStates[stateIndex];
+  state.gpio = actuator.channel;
+  state.closedAngle = constrain(actuator.closedAngle, 0, 180);
+  state.currentAngle = state.closedAngle;
+  state.targetAngle = state.closedAngle;
+  state.minPulseUs = constrain(actuator.minPulseUs, 400, 2999);
+  state.maxPulseUs = constrain(actuator.maxPulseUs, state.minPulseUs + 1, 3000);
+  state.inverted = actuator.inverted;
+  state.detachWhenDone = false;
+  state.lastMoveAt = millis();
+  state.targetState = "CLOSED";
+  state.appliedState = "UNKNOWN";
+
+  if (!attachServoPwm(state.gpio, stateIndex)) {
+    Serial.printf("Falha ao configurar PWM do servo da zona %d no GPIO %d.\n",
+      state.index, state.gpio);
+    state.gpio = -1;
+    return false;
+  }
+
+  state.servoAttached = true;
+  applyServoAngle(stateIndex, state.closedAngle);
+  state.appliedState = "CLOSED";
+  return true;
 }
 
 int zoneIndexToStateIndex(int index) {
@@ -425,7 +568,16 @@ int zoneIndexToStateIndex(int index) {
   if (zoneStateCount < MAX_ZONES) {
     int pos = zoneStateCount;
     zoneStates[pos].index = index;
+    zoneStates[pos].gpio = -1;
     zoneStates[pos].currentAngle = -1;
+    zoneStates[pos].targetAngle = -1;
+    zoneStates[pos].closedAngle = 10;
+    zoneStates[pos].minPulseUs = 500;
+    zoneStates[pos].maxPulseUs = 2500;
+    zoneStates[pos].inverted = false;
+    zoneStates[pos].detachWhenDone = false;
+    zoneStates[pos].lastMoveAt = 0;
+    zoneStates[pos].targetState = "CLOSED";
     zoneStates[pos].appliedState = "UNKNOWN";
     zoneStates[pos].servoAttached = false;
     zoneStateCount++;
@@ -434,41 +586,241 @@ int zoneIndexToStateIndex(int index) {
   return -1;
 }
 
-void setZoneDesiredState(int zoneIndex, const String& desiredState) {
+int findZoneStateIndex(int index) {
+  for (int i = 0; i < zoneStateCount; i++) {
+    if (zoneStates[i].index == index) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+bool setZoneDesiredState(int zoneIndex, const String& desiredState) {
   for (int i = 0; i < config.zoneCount; i++) {
     if (config.zones[i].index == zoneIndex) {
+      if (desiredState == "OPEN" && !config.zones[i].enabled) {
+        return false;
+      }
       config.zones[i].desiredState = desiredState;
-      return;
+      return true;
     }
+  }
+  return false;
+}
+
+bool gpioAlreadyUsedInConfig(int configPosition, int gpio) {
+  for (int i = 0; i < configPosition; i++) {
+    const ZoneCfg& other = config.zones[i];
+    if (other.hasActuator && other.actuator.driver == "ESP32_PWM" &&
+        other.actuator.channel == gpio) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool stateHasActiveConfig(const ZoneState& state) {
+  for (int i = 0; i < config.zoneCount; i++) {
+    const ZoneCfg& zone = config.zones[i];
+    if (zone.index == state.index && zone.hasActuator &&
+        zone.actuator.driver == "ESP32_PWM" &&
+        isServoMappedToZone(zone.index, zone.actuator.channel)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void scheduleServoDetach(int stateIndex) {
+  ZoneState& state = zoneStates[stateIndex];
+  if (!state.servoAttached) {
+    return;
+  }
+  state.targetAngle = state.closedAngle;
+  state.targetState = "CLOSED";
+  state.detachWhenDone = true;
+}
+
+void updateServoMovements(unsigned long now);
+
+void closeAndDetachZoneServo(int stateIndex) {
+  ZoneState& state = zoneStates[stateIndex];
+  scheduleServoDetach(stateIndex);
+  unsigned long startedAt = millis();
+  while (state.servoAttached && millis() - startedAt < SERVO_MOVE_TIMEOUT_MS) {
+    updateServoMovements(millis());
+    esp_task_wdt_reset();
+    delay(5);
+  }
+  if (state.servoAttached) {
+    // Ultimo recurso de seguranca: ordena fechado antes de liberar o PWM antigo.
+    state.currentAngle = state.closedAngle;
+    applyServoAngle(stateIndex, state.currentAngle);
+    state.appliedState = "CLOSED";
+    delay(100);
+    detachZoneServo(stateIndex);
   }
 }
 
 void applyZonesFromConfig() {
   for (int i = 0; i < config.zoneCount; i++) {
     ZoneCfg& zone = config.zones[i];
-    if (!zone.enabled || !zone.hasActuator) {
+    if (!zone.hasActuator) {
       continue;
     }
+
+    if (zone.actuator.driver != "ESP32_PWM") {
+      Serial.printf("Zona %d ignorada: driver %s nao suportado neste firmware.\n",
+        zone.index, zone.actuator.driver.c_str());
+      continue;
+    }
+
     int gpio = zone.actuator.channel;
-    int targetAngle = (zone.desiredState == "OPEN")
+    if (!isServoMappedToZone(zone.index, gpio)) {
+      Serial.printf(
+        "Saida %d ignorada: servo deve usar GPIO %d, mas recebeu GPIO %d.\n",
+        zone.index + 1,
+        isValidHaraPortIndex(zone.index) ? SERVO_GPIO_PINS[zone.index] : -1,
+        gpio
+      );
+      continue;
+    }
+    if (gpioAlreadyUsedInConfig(i, gpio)) {
+      Serial.printf("Zona %d ignorada: GPIO %d repetido na configuracao.\n",
+        zone.index, gpio);
+      continue;
+    }
+
+    String targetState = (zone.enabled && zone.desiredState == "OPEN")
+      ? "OPEN"
+      : "CLOSED";
+    int targetAngle = (targetState == "OPEN")
       ? zone.actuator.openAngle
       : zone.actuator.closedAngle;
     int stateIdx = zoneIndexToStateIndex(zone.index);
-    if (!zoneStates[stateIdx].servoAttached) {
-      setupZoneServo(gpio, zone.actuator.minPulseUs, zone.actuator.maxPulseUs);
-      zoneStates[stateIdx].servoAttached = true;
+    if (stateIdx < 0) {
+      Serial.printf("Sem espaco de estado para a zona %d.\n", zone.index);
+      continue;
     }
-    applyServoAngle(gpio, targetAngle,
-      zone.actuator.minPulseUs, zone.actuator.maxPulseUs,
-      zone.actuator.inverted);
-    zoneStates[stateIdx].currentAngle = targetAngle;
-    zoneStates[stateIdx].appliedState = zone.desiredState;
+
+    ZoneState& state = zoneStates[stateIdx];
+    if (state.servoAttached && state.gpio != gpio) {
+      closeAndDetachZoneServo(stateIdx);
+    }
+    if (!state.servoAttached && !setupZoneServo(stateIdx, zone.actuator)) {
+      continue;
+    }
+
+    state.closedAngle = constrain(zone.actuator.closedAngle, 0, 180);
+    state.minPulseUs = constrain(zone.actuator.minPulseUs, 400, 2999);
+    state.maxPulseUs = constrain(zone.actuator.maxPulseUs, state.minPulseUs + 1, 3000);
+    state.inverted = zone.actuator.inverted;
+    state.targetAngle = constrain(targetAngle, 0, 180);
+    state.targetState = targetState;
+    state.detachWhenDone = false;
+  }
+
+  for (int i = 0; i < zoneStateCount; i++) {
+    if (zoneStates[i].servoAttached && !stateHasActiveConfig(zoneStates[i])) {
+      scheduleServoDetach(i);
+    }
   }
 }
 
+void updateServoMovements(unsigned long now) {
+  for (int i = 0; i < zoneStateCount; i++) {
+    ZoneState& state = zoneStates[i];
+    if (!state.servoAttached) {
+      continue;
+    }
+
+    if (state.currentAngle == state.targetAngle) {
+      state.appliedState = state.targetState;
+      if (state.detachWhenDone) {
+        detachZoneServo(i);
+      }
+      continue;
+    }
+    if (now - state.lastMoveAt < SERVO_STEP_INTERVAL_MS) {
+      continue;
+    }
+
+    state.lastMoveAt = now;
+    int delta = state.targetAngle - state.currentAngle;
+    int step = constrain(delta, -SERVO_STEP_DEGREES, SERVO_STEP_DEGREES);
+    state.currentAngle += step;
+    applyServoAngle(i, state.currentAngle);
+
+    if (state.currentAngle == state.targetAngle) {
+      state.appliedState = state.targetState;
+      Serial.printf("Zona %d em %s (%d graus, GPIO %d).\n",
+        state.index, state.appliedState.c_str(), state.currentAngle, state.gpio);
+      if (state.detachWhenDone) {
+        detachZoneServo(i);
+      }
+    }
+  }
+}
+
+bool waitForZoneMovement(int zoneIndex) {
+  int stateIdx = zoneIndexToStateIndex(zoneIndex);
+  if (stateIdx < 0 || !zoneStates[stateIdx].servoAttached) {
+    return false;
+  }
+
+  unsigned long startedAt = millis();
+  while (millis() - startedAt < SERVO_MOVE_TIMEOUT_MS) {
+    unsigned long now = millis();
+    updateServoMovements(now);
+    ZoneState& state = zoneStates[stateIdx];
+    if (state.currentAngle == state.targetAngle &&
+        state.appliedState == state.targetState) {
+      return true;
+    }
+    esp_task_wdt_reset();
+    delay(5);
+  }
+
+  Serial.printf("Timeout ao mover o servo da zona %d.\n", zoneIndex);
+  return false;
+}
+
+void countIrrigationPaths(int& controlledZones, int& openZones) {
+  controlledZones = 0;
+  openZones = 0;
+  for (int i = 0; i < config.zoneCount; i++) {
+    ZoneCfg& zone = config.zones[i];
+    if (!zone.hasActuator || zone.actuator.driver != "ESP32_PWM" ||
+        !isServoMappedToZone(zone.index, zone.actuator.channel)) {
+      continue;
+    }
+    controlledZones++;
+    int stateIdx = findZoneStateIndex(zone.index);
+    if (stateIdx >= 0 && zoneStates[stateIdx].targetState == "OPEN" &&
+        zoneStates[stateIdx].appliedState == "OPEN") {
+      openZones++;
+    }
+  }
+}
+
+bool irrigationPathIsSafe() {
+  int controlledZones;
+  int openZones;
+  countIrrigationPaths(controlledZones, openZones);
+  if (controlledZones == 0 || openZones == 0) {
+    return false;
+  }
+  return config.maxSimultaneousZones <= 0 ||
+    openZones <= config.maxSimultaneousZones;
+}
+
 void applyIrrigationControl() {
+  if (!hasMoistureReading) {
+    setPump(false);
+    return;
+  }
   if (config.pumpMode == "FORCED_ON") {
-    setPump(true);
+    setPump(irrigationPathIsSafe());
     return;
   }
   if (config.pumpMode == "FORCED_OFF") {
@@ -476,33 +828,67 @@ void applyIrrigationControl() {
     return;
   }
   if (config.operationMode == "OFF") {
+    bool changed = false;
+    for (int i = 0; i < config.zoneCount; i++) {
+      if (config.zones[i].desiredState != "CLOSED") {
+        config.zones[i].desiredState = "CLOSED";
+        changed = true;
+      }
+    }
+    if (changed) {
+      applyZonesFromConfig();
+    }
     setPump(false);
     return;
   }
   if (config.operationMode != "AUTO") {
     return;
   }
-  if (!pumpOn && soilMoisture < config.moistureLimit) {
-    setPump(true);
+
+  // Cada area decide pelo proprio sensor e movimenta somente o seu registro.
+  bool zoneStateChanged = false;
+  for (int i = 0; i < config.zoneCount; i++) {
+    ZoneCfg& zone = config.zones[i];
+    if (!zone.enabled || !zone.hasActuator ||
+        !isServoMappedToZone(zone.index, zone.actuator.channel) ||
+        zoneSoilMoisture[zone.index] < 0) {
+      continue;
+    }
+
+    int moisture = zoneSoilMoisture[zone.index];
+    if (moisture < config.moistureLimit && zone.desiredState != "OPEN") {
+      zone.desiredState = "OPEN";
+      zoneStateChanged = true;
+    } else if (moisture > config.moistureLimit + MOISTURE_HYSTERESIS &&
+               zone.desiredState != "CLOSED") {
+      zone.desiredState = "CLOSED";
+      zoneStateChanged = true;
+    }
   }
-  if (pumpOn && soilMoisture > config.moistureLimit + MOISTURE_HYSTERESIS) {
-    setPump(false);
+  if (zoneStateChanged) {
+    applyZonesFromConfig();
   }
+
+  // A bomba so parte depois que pelo menos um registro terminou de abrir.
+  setPump(irrigationPathIsSafe());
 }
 
 void applyPumpSafety() {
   if (!pumpOn) {
     return;
   }
-  if (config.maxSimultaneousZones > 0) {
-    int openZones = 0;
-    for (int i = 0; i < config.zoneCount; i++) {
-      if (config.zones[i].enabled && config.zones[i].desiredState == "OPEN") {
-        openZones++;
-      }
-    }
-    if (openZones == 0) {
-      setPump(false);
+
+  int controlledZones;
+  int openZones;
+  countIrrigationPaths(controlledZones, openZones);
+
+  bool noOpenPath = controlledZones > 0 && openZones == 0;
+  bool tooManyOpenZones = config.maxSimultaneousZones > 0 &&
+    openZones > config.maxSimultaneousZones;
+  if (noOpenPath || tooManyOpenZones) {
+    setPump(false);
+    if (tooManyOpenZones) {
+      Serial.println("Bomba desligada: limite de zonas simultaneas excedido.");
     }
   }
 }
@@ -534,6 +920,7 @@ bool syncConfigFromApi() {
   if (code != 200) {
     Serial.printf("Falha no sync de config. HTTP %d\n", code);
     http.end();
+    recoverDeviceRegistration(code, "Config");
     return false;
   }
   String response = http.getString();
@@ -588,6 +975,7 @@ bool syncConfigFromApi() {
     JsonObject act = z["actuator"];
     if (!act.isNull()) {
       config.zones[i].hasActuator = true;
+      config.zones[i].actuator.driver = act["driver"] | "ESP32_PWM";
       config.zones[i].actuator.channel = act["channel"] | 0;
       config.zones[i].actuator.openAngle = act["openAngle"] | 90;
       config.zones[i].actuator.closedAngle = act["closedAngle"] | 10;
@@ -627,7 +1015,7 @@ bool sendTelemetryToApi() {
   doc["rssi"] = WiFi.RSSI();
   doc["lastIp"] = WiFi.localIP().toString();
   doc["uptimeSeconds"] = (millis() - bootTimeMs) / 1000;
-  doc["firmwareVersion"] = "1.0.0";
+  doc["firmwareVersion"] = "1.2.0";
   if (config.zoneCount > 0) {
     JsonArray zonesArray = doc.createNestedArray("zones");
     for (int i = 0; i < config.zoneCount; i++) {
@@ -635,8 +1023,18 @@ bool sendTelemetryToApi() {
       int stateIdx = zoneIndexToStateIndex(config.zones[i].index);
       z["zoneIndex"] = config.zones[i].index;
       z["desiredState"] = config.zones[i].desiredState;
-      z["appliedState"] = zoneStates[stateIdx].appliedState;
-      z["servoAngle"] = zoneStates[stateIdx].currentAngle;
+      if (isValidHaraPortIndex(config.zones[i].index) &&
+          zoneSoilMoisture[config.zones[i].index] >= 0) {
+        z["soilMoisture"] = zoneSoilMoisture[config.zones[i].index];
+      }
+      if (stateIdx >= 0) {
+        z["appliedState"] = zoneStates[stateIdx].appliedState;
+        if (zoneStates[stateIdx].currentAngle >= 0) {
+          z["servoAngle"] = zoneStates[stateIdx].currentAngle;
+        }
+      } else {
+        z["appliedState"] = "UNKNOWN";
+      }
     }
   }
   String body;
@@ -650,10 +1048,7 @@ bool sendTelemetryToApi() {
   }
   apiReady = false;
   Serial.printf("Falha no envio de telemetria. HTTP %d\n", code);
-  if (code == 401) {
-    deviceToken = "";
-    registerDevice(true);
-  }
+  recoverDeviceRegistration(code, "Telemetria");
   return false;
 }
 
@@ -675,6 +1070,7 @@ bool checkPendingCommands() {
   lastHttpCode = code;
   if (code != 200) {
     http.end();
+    recoverDeviceRegistration(code, "Comandos");
     return false;
   }
   String response = http.getString();
@@ -720,8 +1116,8 @@ bool executeCommand(const char* type, JsonObject payload) {
   }
   if (strcmp(type, "PUMP_ON") == 0) {
     config.pumpMode = "FORCED_ON";
-    setPump(true);
-    return true;
+    setPump(irrigationPathIsSafe());
+    return pumpOn;
   }
   if (strcmp(type, "PUMP_OFF") == 0) {
     setPump(false);
@@ -730,21 +1126,19 @@ bool executeCommand(const char* type, JsonObject payload) {
   }
   if (strcmp(type, "OPEN_ZONE") == 0 && !payload.isNull()) {
     int zoneIndex = payload["zoneIndex"] | -1;
-    if (zoneIndex >= 0) {
-      setZoneDesiredState(zoneIndex, "OPEN");
+    if (zoneIndex >= 0 && setZoneDesiredState(zoneIndex, "OPEN")) {
       applyZonesFromConfig();
       applyPumpSafety();
-      return true;
+      return waitForZoneMovement(zoneIndex);
     }
     return false;
   }
   if (strcmp(type, "CLOSE_ZONE") == 0 && !payload.isNull()) {
     int zoneIndex = payload["zoneIndex"] | -1;
-    if (zoneIndex >= 0) {
-      setZoneDesiredState(zoneIndex, "CLOSED");
+    if (zoneIndex >= 0 && setZoneDesiredState(zoneIndex, "CLOSED")) {
       applyZonesFromConfig();
       applyPumpSafety();
-      return true;
+      return waitForZoneMovement(zoneIndex);
     }
     return false;
   }
@@ -815,18 +1209,40 @@ void updateDisplay() {
 // SETUP
 // ============================================================
 
+void setupWatchdog() {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  esp_task_wdt_config_t wdtConfig;
+  wdtConfig.timeout_ms = WDT_TIMEOUT_SEC * 1000;
+  wdtConfig.idle_core_mask = 0;
+  wdtConfig.trigger_panic = true;
+  esp_err_t result = esp_task_wdt_reconfigure(&wdtConfig);
+  if (result == ESP_ERR_INVALID_STATE) {
+    result = esp_task_wdt_init(&wdtConfig);
+  }
+#else
+  esp_err_t result = esp_task_wdt_init(WDT_TIMEOUT_SEC, true);
+#endif
+  if (result != ESP_OK && result != ESP_ERR_INVALID_STATE) {
+    Serial.printf("Falha ao configurar watchdog: %d\n", result);
+  }
+  if (esp_task_wdt_status(NULL) != ESP_OK) {
+    esp_task_wdt_add(NULL);
+  }
+}
+
 void setup() {
+  // Desliga o rele antes de inicializar display, Serial ou Wi-Fi.
+  pinMode(PUMP_RELAY_PIN, OUTPUT);
+  setPump(false);
+
   Serial.begin(115200);
   lcd.begin(16, 2);
   showStatus("Hara Tech", "Inicializando");
 
-  // Configure watchdog
-  esp_task_wdt_init(WDT_TIMEOUT_SEC, true);
-  esp_task_wdt_add(NULL);
-
-  pinMode(SOIL_SENSOR_PIN, INPUT);
-  pinMode(PUMP_RELAY_PIN, OUTPUT);
-  setPump(false);
+  for (int i = 0; i < HARA_PORT_COUNT; i++) {
+    pinMode(SOIL_SENSOR_GPIO_PINS[i], INPUT);
+  }
+  analogReadResolution(12);
 
   chipId = getChipId();
   loadCredentials();
@@ -837,6 +1253,11 @@ void setup() {
     sendHeartbeat();
     syncConfigFromApi();
   }
+
+  // O portal do WiFiManager pode ficar aberto por ate 180 segundos.
+  // Ative o watchdog somente depois dele terminar para evitar reinicios
+  // enquanto o usuario informa a rede Wi-Fi.
+  setupWatchdog();
 }
 
 // ============================================================
@@ -846,6 +1267,7 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
+  updateServoMovements(now);
   maintainWifi();
   if (WiFi.status() == WL_CONNECTED) {
     ensureDeviceRegistered();
@@ -853,7 +1275,7 @@ void loop() {
 
   if (now - lastSensorReadAt >= SENSOR_INTERVAL_MS) {
     lastSensorReadAt = now;
-    soilMoisture = readSoilMoisture();
+    readConfiguredSoilMoisture();
     applyIrrigationControl();
     applyPumpSafety();
   }

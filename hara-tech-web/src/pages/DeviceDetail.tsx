@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
+import { Select } from '../components/ui/select'
 import { Skeleton } from '../components/ui/skeleton'
 import { Modal } from '../components/ui/modal'
 import {
@@ -15,6 +16,12 @@ import {
   ChevronDown, ChevronUp,
 } from 'lucide-react'
 import type { Zone, DeviceConfig, Command, Telemetry, IrrigationLog } from '../lib/types'
+
+const HARA_PORTS = [
+  { number: 1, zoneIndex: 0, servoGpio: 13, sensorGpio: 34 },
+  { number: 2, zoneIndex: 1, servoGpio: 14, sensorGpio: 35 },
+  { number: 3, zoneIndex: 2, servoGpio: 25, sensorGpio: 36 },
+] as const
 
 export default function DeviceDetail() {
   const { deviceId } = useParams<{ deviceId: string }>()
@@ -130,7 +137,7 @@ export default function DeviceDetail() {
     })
   }
 
-  const saveZone = async (input: ZoneMutation & { name: string }) => {
+  const saveZone = async (input: ZoneMutation & Required<Pick<ZoneMutation, 'name' | 'index' | 'actuator'>>) => {
     if (!deviceId) return
     setError('')
     try {
@@ -357,7 +364,14 @@ export default function DeviceDetail() {
               <CardTitle>Rega por área</CardTitle>
               <p className="mt-1 text-xs text-[var(--text-tertiary)]">Acompanhe cada local e regue manualmente quando precisar.</p>
             </div>
-            <Button size="sm" variant="secondary" onClick={() => setZoneModal('new')} icon={<Plus />}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setZoneModal('new')}
+              icon={<Plus />}
+              disabled={zones.length >= HARA_PORTS.length}
+              title={zones.length >= HARA_PORTS.length ? 'As três saídas já estão configuradas' : undefined}
+            >
               Nova área
             </Button>
           </div>
@@ -375,6 +389,7 @@ export default function DeviceDetail() {
                 const zoneLogs = irrigationLogs.filter((log) => log.zone?.index === z.index)
                 const activeLog = zoneLogs.find((log) => !log.endedAt)
                 const stats = getZoneStats(zoneLogs, clock)
+                const zoneTelemetry = telemetry?.zones.find((item) => item.zoneIndex === z.index)
                 const isWatering = Boolean(activeLog) || (isOpen && Boolean(telemetry?.pumpOn))
                 const hasPendingCommand = commands.some((command) =>
                   (command.status === 'PENDING' || command.status === 'SENT') &&
@@ -395,7 +410,7 @@ export default function DeviceDetail() {
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-mono text-[var(--text-tertiary)]">Área {z.index + 1}</span>
+                          <span className="text-xs font-mono text-[var(--text-tertiary)]">Saída {z.index + 1}</span>
                           <Badge variant={isWatering ? 'success' : hasPendingCommand ? 'warning' : 'neutral'}>{stateLabel}</Badge>
                         </div>
                         <h3 className="mt-2 truncate text-lg font-semibold tracking-[-0.02em] text-black">{z.name}</h3>
@@ -426,7 +441,7 @@ export default function DeviceDetail() {
 
                     {!hasActuator && (
                       <button onClick={() => setZoneModal(z)} className="mt-4 text-left text-xs font-medium text-black underline underline-offset-4">
-                        Configure o GPIO do atuador para liberar a rega manual
+                        Configure uma saída física para liberar a rega manual
                       </button>
                     )}
 
@@ -440,7 +455,8 @@ export default function DeviceDetail() {
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-tertiary)]">
                       <div className="flex flex-wrap gap-x-4 gap-y-1">
                         <span>Válvula: {z.confirmedState === 'UNAVAILABLE' ? z.appliedState : z.confirmedState}</span>
-                        <span>GPIO: {z.actuator?.channel ?? 'não configurado'}</span>
+                        <span>Conector: Saída {z.index + 1}</span>
+                        <span>Umidade: {zoneTelemetry?.soilMoisture == null ? '—' : `${zoneTelemetry.soilMoisture}%`}</span>
                         <span>Ângulo: {z.lastAppliedAngle === null ? '—' : `${z.lastAppliedAngle}°`}</span>
                       </div>
                       <button onClick={() => toggleZoneDetails(z.id)} className="inline-flex items-center gap-1 font-medium text-black">
@@ -517,6 +533,9 @@ export default function DeviceDetail() {
         <ZoneForm
           key={zoneModal === 'new' ? 'new' : zoneModal?.id}
           zone={zoneModal === 'new' ? null : zoneModal}
+          occupiedPortIndexes={zones
+            .filter((candidate) => candidate.id !== (zoneModal === 'new' ? undefined : zoneModal?.id))
+            .map((candidate) => candidate.index)}
           onCancel={() => setZoneModal(null)}
           onSave={saveZone}
         />
@@ -594,29 +613,65 @@ function triggerLabel(trigger: IrrigationLog['triggeredBy']) {
 
 function ZoneForm({
   zone,
+  occupiedPortIndexes,
   onCancel,
   onSave,
 }: {
   zone: Zone | null
+  occupiedPortIndexes: number[]
   onCancel: () => void
-  onSave: (input: ZoneMutation & { name: string }) => Promise<void>
+  onSave: (input: ZoneMutation & Required<Pick<ZoneMutation, 'name' | 'index' | 'actuator'>>) => Promise<void>
 }) {
+  const suggestedPort = HARA_PORTS.find((port) => !occupiedPortIndexes.includes(port.zoneIndex))
   const [name, setName] = useState(zone?.name ?? '')
-  const [channel, setChannel] = useState(zone?.actuator?.channel?.toString() ?? '')
+  const [portIndex, setPortIndex] = useState(
+    zone?.index?.toString() ?? suggestedPort?.zoneIndex.toString() ?? ''
+  )
+  const [openAngle, setOpenAngle] = useState(zone?.actuator?.openAngle?.toString() ?? '90')
+  const [closedAngle, setClosedAngle] = useState(zone?.actuator?.closedAngle?.toString() ?? '10')
+  const [inverted, setInverted] = useState(zone?.actuator?.inverted ?? false)
+  const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    if (!name.trim()) return
+    setFormError('')
+    if (!name.trim()) {
+      setFormError('Informe o nome da área.')
+      return
+    }
 
-    const parsedChannel = channel.trim() === '' ? undefined : Number(channel)
-    if (parsedChannel !== undefined && (!Number.isInteger(parsedChannel) || parsedChannel < 0 || parsedChannel > 39)) return
+    const selectedPort = HARA_PORTS.find((port) => port.zoneIndex === Number(portIndex))
+    const parsedOpenAngle = Number(openAngle)
+    const parsedClosedAngle = Number(closedAngle)
+    if (!selectedPort) {
+      setFormError('Selecione a saída 1, 2 ou 3 da caixa.')
+      return
+    }
+    if (occupiedPortIndexes.includes(selectedPort.zoneIndex)) {
+      setFormError('Esta saída já está sendo usada por outra área.')
+      return
+    }
+    if (
+      !Number.isInteger(parsedOpenAngle) || parsedOpenAngle < 0 || parsedOpenAngle > 180 ||
+      !Number.isInteger(parsedClosedAngle) || parsedClosedAngle < 0 || parsedClosedAngle > 180 ||
+      parsedOpenAngle === parsedClosedAngle
+    ) {
+      setFormError('Use ângulos inteiros entre 0° e 180°, com abertura e fechamento diferentes.')
+      return
+    }
 
     setSaving(true)
     try {
       await onSave({
         name: name.trim(),
-        ...(parsedChannel === undefined ? {} : { actuator: { channel: parsedChannel } }),
+        index: selectedPort.zoneIndex,
+        actuator: {
+          channel: selectedPort.servoGpio,
+          openAngle: parsedOpenAngle,
+          closedAngle: parsedClosedAngle,
+          inverted,
+        },
       })
     } finally {
       setSaving(false)
@@ -632,18 +687,57 @@ function ZoneForm({
         placeholder="Ex.: Horta de alface"
         required
       />
-      <Input
-        label="GPIO do servo"
-        type="number"
-        value={channel}
-        onChange={(event) => setChannel(event.target.value)}
-        placeholder="Ex.: 13"
-        min={0}
-        max={39}
-      />
+      <Select
+        label="Saída da caixa"
+        value={portIndex}
+        onChange={(event) => setPortIndex(event.target.value)}
+        required
+      >
+        <option value="" disabled>Selecione a saída</option>
+        {HARA_PORTS.map((port) => (
+          <option key={port.number} value={port.zoneIndex} disabled={occupiedPortIndexes.includes(port.zoneIndex)}>
+            Saída {port.number} — sensor + servo{occupiedPortIndexes.includes(port.zoneIndex) ? ' (em uso)' : ''}
+          </option>
+        ))}
+      </Select>
       <p className="text-xs leading-5 text-[var(--text-tertiary)]">
-        Informe o GPIO ligado ao servo. Os exemplos de montagem usam 13 para a primeira área e 12 para a segunda.
+        Escolha o mesmo número gravado na caixa. A alimentação e os sinais do sensor e do servo já são definidos internamente.
       </p>
+      {portIndex !== '' && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Ângulo aberto"
+              type="number"
+              value={openAngle}
+              onChange={(event) => setOpenAngle(event.target.value)}
+              min={0}
+              max={180}
+            />
+            <Input
+              label="Ângulo fechado"
+              type="number"
+              value={closedAngle}
+              onChange={(event) => setClosedAngle(event.target.value)}
+              min={0}
+              max={180}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+            <input
+              type="checkbox"
+              checked={inverted}
+              onChange={(event) => setInverted(event.target.checked)}
+              className="size-4 rounded border-[var(--border-primary)]"
+            />
+            Inverter o sentido do servo
+          </label>
+          <p className="text-xs leading-5 text-[var(--text-tertiary)]">
+            O firmware percorre os ângulos suavemente, a 1° a cada 20 ms. Ajuste os limites sem forçar a mangueira ou o braço do servo.
+          </p>
+        </>
+      )}
+      {formError && <p className="text-xs text-red-500">{formError}</p>}
       <div className="flex gap-2 pt-2">
         <Button variant="secondary" onClick={onCancel} className="flex-1">Cancelar</Button>
         <Button type="submit" loading={saving} className="flex-1">

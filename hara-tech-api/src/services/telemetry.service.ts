@@ -14,6 +14,7 @@ export interface TelemetryZoneInput {
   appliedState?: ZoneAppliedState;
   confirmedState?: ZoneConfirmedState;
   servoAngle?: number;
+  soilMoisture?: number;
 }
 
 export interface TelemetryInput {
@@ -72,6 +73,7 @@ export async function processTelemetry(
                 appliedState: zone.appliedState ?? 'UNKNOWN',
                 confirmedState: zone.confirmedState ?? 'UNAVAILABLE',
                 servoAngle: zone.servoAngle ?? null,
+                soilMoisture: zone.soilMoisture ?? null,
                 ...(zoneByIndex.has(zone.zoneIndex)
                   ? { zone: { connect: { id: zoneByIndex.get(zone.zoneIndex)! } } }
                   : {}),
@@ -96,6 +98,7 @@ export async function processTelemetry(
             appliedState: true,
             confirmedState: true,
             servoAngle: true,
+            soilMoisture: true,
           },
         },
       },
@@ -111,6 +114,7 @@ export async function processTelemetry(
         lastTelemetryAt: now,
       };
       if (zone.servoAngle !== undefined) updateData.lastAppliedAngle = zone.servoAngle;
+      if (zone.desiredState !== undefined) updateData.desiredState = zone.desiredState;
       if (zone.appliedState !== undefined) {
         updateData.appliedState = zone.appliedState;
         updateData.isActive = zone.appliedState === 'OPEN';
@@ -152,6 +156,7 @@ export async function getLatestTelemetry(userId: string, deviceId: string) {
           desiredState: true,
           appliedState: true,
           servoAngle: true,
+          soilMoisture: true,
         },
       },
     },

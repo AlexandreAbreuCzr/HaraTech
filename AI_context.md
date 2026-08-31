@@ -258,9 +258,8 @@ Typical properties:
 * status
 * lastSeen
 
-A device may manage multiple zones.
-
-Never assume a single device controls only one zone.
+A device may manage multiple zones. The current Hara Tech enclosure has exactly
+three fixed physical outputs, so this hardware profile manages at most three zones.
 
 ---
 
@@ -283,18 +282,15 @@ Each zone contains:
 * Associated actuator.
 * Sensor data.
 
-Important:
+Current Hara Tech hardware mapping:
 
-Never hardcode zone quantities.
+* Output 1: zone index 0, servo GPIO 13, sensor GPIO 34.
+* Output 2: zone index 1, servo GPIO 14, sensor GPIO 35.
+* Output 3: zone index 2, servo GPIO 25, sensor GPIO 36.
 
-The system must support:
-
-* 1 zone
-* 2 zones
-* 10 zones
-* 100+ zones
-
-without architectural changes.
+The UI exposes only Output 1/2/3, never raw GPIO fields. Each configured zone owns
+one output, its moisture sensor, and the servo that opens its irrigation register.
+Unconfigured outputs remain inactive in firmware.
 
 ---
 
