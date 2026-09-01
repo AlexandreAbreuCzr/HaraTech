@@ -1,5 +1,7 @@
 # Montagem elétrica e pinagem — Hara Tech
 
+![Diagrama completo das conexões Hara Tech](diagramas/hara-tech-conexoes-completas.png)
+
 Este guia corresponde ao firmware `esp32codes/initial/initial.ino` e à caixa Hara Tech com **três saídas físicas fixas**. No painel o usuário escolhe somente **Saída 1, Saída 2 ou Saída 3**; os GPIOs não são informados nem alterados.
 
 Cada saída pertence a uma área de irrigação e reúne as conexões de alimentação e comunicação de:
