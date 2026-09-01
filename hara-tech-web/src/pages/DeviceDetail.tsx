@@ -119,6 +119,26 @@ export default function DeviceDetail() {
     }
   }
 
+  const testZoneServo = async (zone: Zone) => {
+    if (!deviceId) return
+    const actionKey = `test-${zone.id}`
+    setSending(actionKey)
+    setError('')
+    setNotice('')
+    try {
+      await api.comandos.criar(deviceId, {
+        type: 'TEST_ZONE',
+        payload: { zoneIndex: zone.index },
+      })
+      setNotice(`Teste enviado para “${zone.name}”. Observe o servo: fechado → aberto → fechado, sempre com a bomba desligada.`)
+      await fetchAll(false)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível testar o servo desta área.')
+    } finally {
+      setSending(null)
+    }
+  }
+
   const toggleZoneDetails = (zoneId: string) => {
     setExpandedZones((current) => {
       const next = new Set(current)
@@ -277,30 +297,16 @@ export default function DeviceDetail() {
           </div>
         </Card>
 
-        {/* Telemetry */}
+        {/* Controller status. Soil moisture belongs to each area below. */}
         {telemetry && (
           <Card className="animate-slide-up">
             <CardHeader>
-              <CardTitle>Telemetria</CardTitle>
+              <CardTitle>Controlador</CardTitle>
               <Badge variant={telemetry.pumpOn ? 'warning' : 'neutral'}>
                 {telemetry.pumpOn ? 'Bomba ligada' : 'Bomba desligada'}
               </Badge>
             </CardHeader>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="border-l border-[var(--border-primary)] pl-4 first:border-l-0 first:pl-0">
-                <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)] mb-2">
-                  <Droplets className="size-3" /> Umidade
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-2.5 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${moistureColor(telemetry.soilMoisture, config?.moistureThreshold ?? 35)}`}
-                      style={{ width: `${telemetry.soilMoisture}%` }}
-                    />
-                  </div>
-                  <span className="text-xl font-bold text-[var(--text-primary)]">{telemetry.soilMoisture}%</span>
-                </div>
-              </div>
               <div className="border-l border-[var(--border-primary)] pl-4 first:border-l-0 first:pl-0">
                 <div className="text-xs text-[var(--text-tertiary)] mb-2">Bomba</div>
                 <div className={`text-xl font-semibold ${telemetry.pumpOn ? 'text-black' : 'text-[var(--text-tertiary)]'}`}>
@@ -321,6 +327,12 @@ export default function DeviceDetail() {
                   {new Date(telemetry.createdAt).toLocaleTimeString()}
                 </div>
               </div>
+              <div className="border-l border-[var(--border-primary)] pl-4 first:border-l-0 first:pl-0">
+                <div className="text-xs text-[var(--text-tertiary)] mb-2">Firmware</div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">
+                  {telemetry.firmwareVersion ?? '—'}
+                </div>
+              </div>
             </div>
           </Card>
         )}
@@ -336,7 +348,7 @@ export default function DeviceDetail() {
               {[
                 { label: 'Modo', value: config.operationMode },
                 { label: 'Bomba', value: config.pumpMode },
-                { label: 'Umidade Mín', value: `${config.moistureThreshold}%` },
+                { label: 'Áreas', value: `${zones.length} / ${HARA_PORTS.length}` },
                 { label: 'Versão', value: `v${config.configVersion}` },
               ].map(s => (
                 <div key={s.label} className="border-l border-[var(--border-primary)] pl-3 first:border-l-0 first:pl-0">
@@ -381,10 +393,11 @@ export default function DeviceDetail() {
                 const activeLog = zoneLogs.find((log) => !log.endedAt)
                 const stats = getZoneStats(zoneLogs, clock)
                 const zoneTelemetry = telemetry?.zones.find((item) => item.zoneIndex === z.index)
+                const zoneThreshold = z.moistureThreshold ?? config?.moistureThreshold ?? 35
                 const isWatering = Boolean(activeLog) || (isOpen && Boolean(telemetry?.pumpOn))
                 const hasPendingCommand = commands.some((command) =>
                   (command.status === 'PENDING' || command.status === 'SENT') &&
-                  (command.type === 'OPEN_ZONE' || command.type === 'CLOSE_ZONE') &&
+                  (command.type === 'OPEN_ZONE' || command.type === 'CLOSE_ZONE' || command.type === 'TEST_ZONE') &&
                   command.payload?.zoneIndex === z.index
                 )
                 const actionKey = `${isWatering ? 'stop' : 'start'}-${z.id}`
@@ -407,7 +420,7 @@ export default function DeviceDetail() {
                         <h3 className="mt-2 truncate text-lg font-semibold tracking-[-0.02em] text-black">{z.name}</h3>
                         <p className="mt-1 text-xs text-[var(--text-tertiary)]">
                           {activeLog
-                            ? `Iniciada ${formatRelativeTime(activeLog.startedAt, clock)} · confirmada pelo dispositivo`
+                            ? `Iniciada ${formatRelativeTime(activeLog.startedAt, clock)} · comando aceito pelo dispositivo`
                             : stats.lastLog
                               ? `Última rega em ${formatDateTime(stats.lastLog.startedAt)}`
                               : 'Ainda não há regas confirmadas nesta área'}
@@ -425,6 +438,16 @@ export default function DeviceDetail() {
                         >
                           {isWatering ? 'Parar rega' : 'Iniciar rega'}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void testZoneServo(z)}
+                          loading={sending === `test-${z.id}`}
+                          disabled={sending !== null || !hasActuator || !z.enabled || hasPendingCommand || isOpen || Boolean(telemetry?.pumpOn)}
+                          title={isOpen || telemetry?.pumpOn ? 'Feche a área e desligue a bomba antes do teste' : 'Move fechado → aberto → fechado sem ligar a bomba'}
+                        >
+                          Testar servo
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => setZoneModal(z)} icon={<Settings />} title="Configurar área" aria-label={`Configurar ${z.name}`} />
                         <Button size="sm" variant="ghost" onClick={() => void deleteZone(z)} icon={<Trash2 />} className="hover:text-red-500" title="Remover área" aria-label={`Remover ${z.name}`} />
                       </div>
@@ -436,7 +459,30 @@ export default function DeviceDetail() {
                       </button>
                     )}
 
-                    <div className="mt-5 grid grid-cols-2 border-y border-[var(--border-primary)] py-4 sm:grid-cols-4">
+                    <div className="mt-5 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-4">
+                      <div className="flex items-end justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
+                            <Droplets className="size-3.5" /> Umidade desta área
+                          </div>
+                          <div className="mt-1 text-2xl font-semibold text-black">
+                            {zoneTelemetry?.soilMoisture == null ? '—' : `${zoneTelemetry.soilMoisture}%`}
+                          </div>
+                        </div>
+                        <div className="text-right text-xs text-[var(--text-tertiary)]">
+                          <div>Inicia abaixo de {zoneThreshold}%</div>
+                          <div>Encerra acima de {Math.min(100, zoneThreshold + 5)}%</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${moistureColor(zoneTelemetry?.soilMoisture ?? 0, zoneThreshold)}`}
+                          style={{ width: `${zoneTelemetry?.soilMoisture ?? 0}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 border-y border-[var(--border-primary)] py-4 sm:grid-cols-4">
                       <ZoneMetric label="Agora" value={activeLog ? formatDuration(getLogDuration(activeLog, clock)) : '—'} detail={activeLog ? 'em andamento' : 'sem rega ativa'} />
                       <ZoneMetric label="Hoje" value={formatDuration(stats.todaySeconds)} detail={`${stats.todayCount} rega${stats.todayCount === 1 ? '' : 's'}`} />
                       <ZoneMetric label="Últimos 7 dias" value={formatDuration(stats.weekSeconds)} detail={`${stats.weekCount} rega${stats.weekCount === 1 ? '' : 's'}`} />
@@ -445,10 +491,10 @@ export default function DeviceDetail() {
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-tertiary)]">
                       <div className="flex flex-wrap gap-x-4 gap-y-1">
-                        <span>Válvula: {z.confirmedState === 'UNAVAILABLE' ? z.appliedState : z.confirmedState}</span>
+                        <span>Comando do servo: {z.desiredState === 'OPEN' ? 'ABRIR' : 'FECHAR'}</span>
                         <span>Conector: Saída {z.index + 1}</span>
-                        <span>Umidade: {zoneTelemetry?.soilMoisture == null ? '—' : `${zoneTelemetry.soilMoisture}%`}</span>
-                        <span>Ângulo: {z.lastAppliedAngle === null ? '—' : `${z.lastAppliedAngle}°`}</span>
+                        <span>Ângulo comandado: {z.lastAppliedAngle === null ? '—' : `${z.lastAppliedAngle}°`}</span>
+                        <span>Posição física: sem sensor de retorno</span>
                       </div>
                       <button onClick={() => toggleZoneDetails(z.id)} className="inline-flex items-center gap-1 font-medium text-black">
                         {expanded ? 'Ocultar eventos' : `Ver eventos (${zoneLogs.length})`}
@@ -494,11 +540,14 @@ export default function DeviceDetail() {
                   key={c.id}
                   className="flex items-center justify-between border-b border-[var(--border-primary)] px-2 py-3"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-medium text-[var(--text-primary)]">{c.type}</span>
-                    {c.payload && (
-                      <span className="text-xs text-[var(--text-tertiary)]">{JSON.stringify(c.payload)}</span>
-                    )}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-medium text-[var(--text-primary)]">{c.type}</span>
+                      {c.payload && (
+                        <span className="text-xs text-[var(--text-tertiary)]">{JSON.stringify(c.payload)}</span>
+                      )}
+                    </div>
+                    {c.failReason && <p className="mt-1 text-xs text-red-600">{c.failReason}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant={
@@ -620,6 +669,7 @@ function ZoneForm({
   )
   const [openAngle, setOpenAngle] = useState(zone?.actuator?.openAngle?.toString() ?? '90')
   const [closedAngle, setClosedAngle] = useState(zone?.actuator?.closedAngle?.toString() ?? '10')
+  const [moistureThreshold, setMoistureThreshold] = useState(zone?.moistureThreshold?.toString() ?? '35')
   const [inverted, setInverted] = useState(zone?.actuator?.inverted ?? false)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -635,6 +685,7 @@ function ZoneForm({
     const selectedPort = HARA_PORTS.find((port) => port.zoneIndex === Number(portIndex))
     const parsedOpenAngle = Number(openAngle)
     const parsedClosedAngle = Number(closedAngle)
+    const parsedMoistureThreshold = Number(moistureThreshold)
     if (!selectedPort) {
       setFormError('Selecione a saída 1, 2 ou 3 da caixa.')
       return
@@ -651,12 +702,17 @@ function ZoneForm({
       setFormError('Use ângulos inteiros entre 0° e 180°, com abertura e fechamento diferentes.')
       return
     }
+    if (!Number.isInteger(parsedMoistureThreshold) || parsedMoistureThreshold < 0 || parsedMoistureThreshold > 100) {
+      setFormError('A umidade mínima deve ser um número inteiro entre 0% e 100%.')
+      return
+    }
 
     setSaving(true)
     try {
       await onSave({
         name: name.trim(),
         index: selectedPort.zoneIndex,
+        moistureThreshold: parsedMoistureThreshold,
         actuator: {
           channel: selectedPort.servoGpio,
           openAngle: parsedOpenAngle,
@@ -676,6 +732,15 @@ function ZoneForm({
         value={name}
         onChange={(event) => setName(event.target.value)}
         placeholder="Ex.: Horta de alface"
+        required
+      />
+      <Input
+        label="Umidade mínima desta área (%)"
+        type="number"
+        value={moistureThreshold}
+        onChange={(event) => setMoistureThreshold(event.target.value)}
+        min={0}
+        max={100}
         required
       />
       <Select

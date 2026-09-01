@@ -15,6 +15,7 @@ export interface Zone {
   id: string
   name: string
   index: number
+  moistureThreshold: number
   isActive: boolean
   enabled: boolean
   desiredState: 'OPEN' | 'CLOSED'
@@ -41,6 +42,7 @@ export interface ActuatorConfig {
 export interface ZoneConfig {
   index: number
   name: string
+  moistureThreshold: number
   enabled: boolean
   desiredState: string
   actuator: ActuatorConfig | null

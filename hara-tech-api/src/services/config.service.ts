@@ -20,6 +20,7 @@ export interface ZoneActuatorConfig {
 export interface ZoneConfig {
   index: number;
   name: string;
+  moistureThreshold: number;
   enabled: boolean;
   desiredState: string;
   actuator: ZoneActuatorConfig | null;
@@ -40,6 +41,7 @@ export interface DeviceConfigResponse {
 const zoneConfigSelect = {
   index: true,
   name: true,
+  moistureThreshold: true,
   enabled: true,
   desiredState: true,
   actuator: {
@@ -116,6 +118,7 @@ export async function getDeviceConfig(
     zones: device.zones.map((zone) => ({
       index: zone.index,
       name: zone.name,
+      moistureThreshold: zone.moistureThreshold,
       enabled: zone.enabled,
       desiredState: zone.desiredState,
       actuator: zone.actuator

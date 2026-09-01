@@ -18,7 +18,7 @@ export interface TelemetryZoneInput {
 }
 
 export interface TelemetryInput {
-  soilMoisture: number;
+  soilMoisture?: number;
   pumpOn: boolean;
   firmwareTimestampMs?: number;
   rssi?: number;
@@ -62,12 +62,22 @@ export async function processTelemetry(
     : [];
   const zoneByIndex = new Map(configuredZones.map((zone) => [zone.index, zone]));
   const now = new Date();
+  const areaMoistureReadings = zones.flatMap((zone) =>
+    zone.soilMoisture === undefined ? [] : [zone.soilMoisture]
+  );
+  const aggregateSoilMoisture = areaMoistureReadings.length > 0
+    ? Math.round(
+        areaMoistureReadings.reduce((total, reading) => total + reading, 0) /
+          areaMoistureReadings.length
+      )
+    : input.soilMoisture ?? 0;
 
   return prisma.$transaction(async (tx) => {
     const telemetry = await tx.deviceTelemetry.create({
       data: {
         deviceId: deviceInternalId,
-        soilMoisture: input.soilMoisture,
+        // Compatibilidade do banco: este valor e somente um agregado das areas.
+        soilMoisture: aggregateSoilMoisture,
         pumpOn: input.pumpOn,
         firmwareTimestampMs: input.firmwareTimestampMs ?? null,
         rssi: input.rssi ?? null,
@@ -131,8 +141,8 @@ export async function processTelemetry(
       if (zone.confirmedState !== undefined) {
         updateData.confirmedState = zone.confirmedState;
       } else if (zone.appliedState !== undefined) {
-        updateData.confirmedState =
-          zone.appliedState === 'UNKNOWN' ? 'UNKNOWN' : zone.appliedState;
+        // Servo sem sensor de fim de curso informa comando aplicado, nao posicao fisica.
+        updateData.confirmedState = 'UNAVAILABLE';
       }
       await tx.zone.updateMany({
         where: { deviceId: deviceInternalId, index: zone.zoneIndex },
@@ -141,8 +151,25 @@ export async function processTelemetry(
 
       // A posicao fisica informada pelo ESP32 e a fonte de verdade. Assim, uma
       // confirmacao HTTP perdida nao deixa a interface contando uma rega encerrada.
-      if (zone.appliedState === 'CLOSED') {
-        const activeLog = zoneByIndex.get(zone.zoneIndex)?.irrigationLogs[0];
+      const configuredZone = zoneByIndex.get(zone.zoneIndex);
+      const activeLog = configuredZone?.irrigationLogs[0];
+      if (
+        zone.appliedState === 'OPEN' &&
+        input.pumpOn &&
+        configuredZone &&
+        !activeLog
+      ) {
+        // Aberturas automaticas acontecem no ESP32, sem comando HTTP; a
+        // telemetria cria o historico da area quando a bomba realmente parte.
+        await tx.irrigationLog.create({
+          data: {
+            deviceId: deviceInternalId,
+            zoneId: configuredZone.id,
+            startedAt: now,
+            triggeredBy: 'SENSOR',
+          },
+        });
+      } else if (zone.appliedState === 'CLOSED') {
         if (activeLog) {
           const durationSeconds = Math.max(
             0,

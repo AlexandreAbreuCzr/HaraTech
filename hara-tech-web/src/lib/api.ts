@@ -155,6 +155,7 @@ interface DeviceStatusResponse {
 export interface ZoneMutation {
   name?: string
   index?: number
+  moistureThreshold?: number
   isActive?: boolean
   enabled?: boolean
   actuator?: { channel: number } & Partial<Pick<ActuatorConfig, 'openAngle' | 'closedAngle' | 'minPulseUs' | 'maxPulseUs' | 'inverted'>>

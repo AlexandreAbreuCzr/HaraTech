@@ -17,6 +17,7 @@ export interface ZoneActuatorInput {
 export interface CreateZoneInput {
   name: string;
   index: number;
+  moistureThreshold: number;
   isActive?: boolean;
   enabled?: boolean;
   actuator: ZoneActuatorInput;
@@ -25,6 +26,7 @@ export interface CreateZoneInput {
 export interface UpdateZoneInput {
   name?: string;
   index?: number;
+  moistureThreshold?: number;
   isActive?: boolean;
   enabled?: boolean;
   actuator?: ZoneActuatorInput;
@@ -34,6 +36,7 @@ const zoneSelect = {
   id: true,
   name: true,
   index: true,
+  moistureThreshold: true,
   isActive: true,
   enabled: true,
   desiredState: true,
@@ -121,6 +124,7 @@ async function createZoneWithIndex(
       data: {
         name: input.name,
         index,
+        moistureThreshold: input.moistureThreshold,
         isActive: input.isActive ?? false,
         desiredState: zoneStateFromInput(input.isActive),
         enabled: input.enabled ?? true,

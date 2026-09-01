@@ -32,7 +32,7 @@ model Device {
   lastRssi        Int?
   createdAt       DateTime  @default(now())
 
-  owner          User?           @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  owner          User?             @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   config         DeviceConfig?
   zones          Zone[]
   zoneActuators  ZoneActuator[]
@@ -45,18 +45,19 @@ model Device {
 }
 
 model Zone {
-  id               String              @id @default(uuid())
-  name             String
-  index            Int
-  isActive         Boolean             @default(false)
-  enabled          Boolean             @default(true)
-  desiredState     ZoneDesiredState    @default(CLOSED)
-  appliedState     ZoneAppliedState    @default(UNKNOWN)
-  confirmedState   ZoneConfirmedState  @default(UNAVAILABLE)
-  lastAppliedAngle Int?
-  lastTelemetryAt  DateTime?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                String             @id @default(uuid())
+  name              String
+  index             Int
+  moistureThreshold Int                @default(35)
+  isActive          Boolean            @default(false)
+  enabled           Boolean            @default(true)
+  desiredState      ZoneDesiredState   @default(CLOSED)
+  appliedState      ZoneAppliedState   @default(UNKNOWN)
+  confirmedState    ZoneConfirmedState @default(UNAVAILABLE)
+  lastAppliedAngle  Int?
+  lastTelemetryAt   DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   deviceId String
   device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
@@ -132,20 +133,20 @@ model DeviceTelemetry {
 }
 
 model DeviceTelemetryZone {
-  id             String              @id @default(uuid())
+  id             String             @id @default(uuid())
   zoneIndex      Int
   desiredState   ZoneDesiredState?
-  appliedState   ZoneAppliedState    @default(UNKNOWN)
-  confirmedState ZoneConfirmedState  @default(UNAVAILABLE)
+  appliedState   ZoneAppliedState   @default(UNKNOWN)
+  confirmedState ZoneConfirmedState @default(UNAVAILABLE)
   servoAngle     Int?
   soilMoisture   Int?
-  createdAt      DateTime            @default(now())
+  createdAt      DateTime           @default(now())
 
   telemetryId String
   telemetry   DeviceTelemetry @relation(fields: [telemetryId], references: [id], onDelete: Cascade)
 
   zoneId String?
-  zone   Zone? @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  zone   Zone?   @relation(fields: [zoneId], references: [id], onDelete: SetNull)
 
   @@index([telemetryId])
   @@index([zoneId, createdAt])
@@ -190,7 +191,7 @@ model IrrigationLog {
   device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
   zoneId String?
-  zone   Zone? @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  zone   Zone?   @relation(fields: [zoneId], references: [id], onDelete: SetNull)
 
   @@map("irrigation_logs")
 }
@@ -252,6 +253,7 @@ enum ActuatorDriver {
 enum CommandType {
   OPEN_ZONE
   CLOSE_ZONE
+  TEST_ZONE
   PUMP_ON
   PUMP_OFF
   SYNC_CONFIG
@@ -267,14 +269,14 @@ enum CommandStatus {
 }
 
 model Command {
-  id        String        @id @default(uuid())
-  type      CommandType
-  payload   Json?
-  status    CommandStatus @default(PENDING)
-  createdAt DateTime      @default(now())
-  sentAt    DateTime?
-  ackedAt   DateTime?
-  failedAt  DateTime?
+  id         String        @id @default(uuid())
+  type       CommandType
+  payload    Json?
+  status     CommandStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  sentAt     DateTime?
+  ackedAt    DateTime?
+  failedAt   DateTime?
   failReason String?
 
   deviceId String

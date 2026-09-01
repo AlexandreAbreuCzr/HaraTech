@@ -15,7 +15,8 @@ const telemetryZoneSchema = z.object({
 });
 
 const telemetrySchema = z.object({
-  soilMoisture: z.number().int().min(0).max(100),
+  // Mantido opcional para firmwares antigos; a leitura principal pertence as areas.
+  soilMoisture: z.number().int().min(0).max(100).optional(),
   pumpOn: z.boolean(),
   firmwareTimestampMs: z.number().int().positive().optional(),
   rssi: z.number().int().max(0).optional(),

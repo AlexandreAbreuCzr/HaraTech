@@ -57,6 +57,7 @@ const bool PUMP_ACTIVE_HIGH = true;
 const int SOIL_RAW_DRY = 4095;
 const int SOIL_RAW_WET = 1200;
 const int MOISTURE_HYSTERESIS = 5;
+const uint8_t SENSOR_SAMPLE_COUNT = 15;
 
 // ============================================================
 // TEMPOS E TIMEOUTS
@@ -82,6 +83,7 @@ const int SERVO_PERIOD_US = 20000;
 const int SERVO_STEP_DEGREES = 1;
 const unsigned long SERVO_STEP_INTERVAL_MS = 20;
 const unsigned long SERVO_MOVE_TIMEOUT_MS = 10000;
+const unsigned long SERVO_ENDPOINT_HOLD_MS = 600;
 
 // ============================================================
 // ESTADO GLOBAL
@@ -99,6 +101,7 @@ unsigned long lastConfigSyncAt = 0;
 unsigned long lastTelemetryAt = 0;
 unsigned long lastCommandPollAt = 0;
 unsigned long bootTimeMs = 0;
+int displayZoneCursor = 0;
 
 int soilMoisture = 0;
 int zoneSoilMoisture[HARA_PORT_COUNT] = {-1, -1, -1};
@@ -125,6 +128,7 @@ struct ActuatorCfg {
 struct ZoneCfg {
   int index;
   String name;
+  int moistureLimit;
   bool enabled;
   String desiredState;
   ActuatorCfg actuator;
@@ -219,11 +223,14 @@ void addDeviceAuthHeader(HTTPClient& http) {
 }
 
 void showStatus(const String& line1, const String& line2 = "") {
-  lcd.clear();
+  // Sobrescreve as 16 colunas sem limpar o display; isso reduz cintilacao e
+  // evita pulsos extras no LCD quando bomba ou servo mudam de estado.
+  String paddedLine1 = line1 + "                ";
+  String paddedLine2 = line2 + "                ";
   lcd.setCursor(0, 0);
-  lcd.print(line1.substring(0, 16));
+  lcd.print(paddedLine1.substring(0, 16));
   lcd.setCursor(0, 1);
-  lcd.print(line2.substring(0, 16));
+  lcd.print(paddedLine2.substring(0, 16));
 }
 
 // ============================================================
@@ -277,6 +284,7 @@ bool commandAlreadyCompleted(const String& commandId) {
 bool commandChangesPhysicalOutput(const char* type) {
   return strcmp(type, "OPEN_ZONE") == 0 ||
          strcmp(type, "CLOSE_ZONE") == 0 ||
+         strcmp(type, "TEST_ZONE") == 0 ||
          strcmp(type, "PUMP_ON") == 0 ||
          strcmp(type, "PUMP_OFF") == 0;
 }
@@ -514,7 +522,23 @@ bool sendHeartbeat() {
 // ============================================================
 
 int readSoilMoisture(int gpio) {
-  int raw = analogRead(gpio);
+  int samples[SENSOR_SAMPLE_COUNT];
+  analogRead(gpio); // Descarta a primeira conversao depois da troca do ADC.
+  for (uint8_t i = 0; i < SENSOR_SAMPLE_COUNT; i++) {
+    samples[i] = analogRead(gpio);
+    delay(2);
+  }
+  // Mediana: rejeita os picos causados por rele, bomba e comutacao dos servos.
+  for (uint8_t i = 1; i < SENSOR_SAMPLE_COUNT; i++) {
+    int value = samples[i];
+    int j = i - 1;
+    while (j >= 0 && samples[j] > value) {
+      samples[j + 1] = samples[j];
+      j--;
+    }
+    samples[j + 1] = value;
+  }
+  int raw = samples[SENSOR_SAMPLE_COUNT / 2];
   int percent = map(raw, SOIL_RAW_DRY, SOIL_RAW_WET, 0, 100);
   return constrain(percent, 0, 100);
 }
@@ -588,19 +612,20 @@ void detachServoPwm(int gpio) {
 #endif
 }
 
-void writeServoPwm(int gpio, int stateIndex, int duty) {
+bool writeServoPwm(int gpio, int stateIndex, int duty) {
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
-  ledcWrite(gpio, duty);
+  return ledcWrite(gpio, duty);
 #else
   ledcWrite(stateIndex, duty);
+  return true;
 #endif
 }
 
-void applyServoAngle(int stateIndex, int angle) {
+bool applyServoAngle(int stateIndex, int angle) {
   ZoneState& state = zoneStates[stateIndex];
   int effectiveAngle = state.inverted ? (180 - angle) : angle;
   int pulseUs = angleToPulseUs(effectiveAngle, state.minPulseUs, state.maxPulseUs);
-  writeServoPwm(state.gpio, stateIndex, pulseUsToDuty(pulseUs));
+  return writeServoPwm(state.gpio, stateIndex, pulseUsToDuty(pulseUs));
 }
 
 void detachZoneServo(int stateIndex) {
@@ -635,8 +660,23 @@ bool setupZoneServo(int stateIndex, const ActuatorCfg& actuator) {
   }
 
   state.servoAttached = true;
-  applyServoAngle(stateIndex, state.closedAngle);
+  if (!applyServoAngle(stateIndex, state.closedAngle)) {
+    Serial.printf("Falha ao escrever PWM inicial do servo da zona %d no GPIO %d.\n",
+      state.index, state.gpio);
+    detachZoneServo(stateIndex);
+    return false;
+  }
+  delay(SERVO_ENDPOINT_HOLD_MS);
   state.appliedState = "CLOSED";
+  Serial.printf(
+    "Servo da zona %d pronto: GPIO %d, fechado %d, aberto %d, pulsos %d-%d us.\n",
+    state.index,
+    state.gpio,
+    actuator.closedAngle,
+    actuator.openAngle,
+    state.minPulseUs,
+    state.maxPulseUs
+  );
   return true;
 }
 
@@ -736,8 +776,11 @@ void closeAndDetachZoneServo(int stateIndex) {
   if (state.servoAttached) {
     // Ultimo recurso de seguranca: ordena fechado antes de liberar o PWM antigo.
     state.currentAngle = state.closedAngle;
-    applyServoAngle(stateIndex, state.currentAngle);
-    state.appliedState = "CLOSED";
+    if (applyServoAngle(stateIndex, state.currentAngle)) {
+      state.appliedState = "CLOSED";
+    } else {
+      state.appliedState = "UNKNOWN";
+    }
     delay(100);
     detachZoneServo(stateIndex);
   }
@@ -830,7 +873,14 @@ void updateServoMovements(unsigned long now) {
     int delta = state.targetAngle - state.currentAngle;
     int step = constrain(delta, -SERVO_STEP_DEGREES, SERVO_STEP_DEGREES);
     state.currentAngle += step;
-    applyServoAngle(i, state.currentAngle);
+    if (!applyServoAngle(i, state.currentAngle)) {
+      Serial.printf("Falha ao atualizar PWM da zona %d no GPIO %d.\n",
+        state.index, state.gpio);
+      lastCommandFailureReason = "Falha ao escrever PWM do servo";
+      state.appliedState = "UNKNOWN";
+      detachZoneServo(i);
+      continue;
+    }
 
     if (state.currentAngle == state.targetAngle) {
       state.appliedState = state.targetState;
@@ -856,6 +906,12 @@ bool waitForZoneMovement(int zoneIndex) {
     unsigned long now = millis();
     updateServoMovements(now);
     ZoneState& state = zoneStates[stateIdx];
+    if (!state.servoAttached) {
+      if (lastCommandFailureReason.length() == 0) {
+        lastCommandFailureReason = "PWM do servo foi desconectado";
+      }
+      return false;
+    }
     if (state.currentAngle == state.targetAngle &&
         state.appliedState == state.targetState) {
       return true;
@@ -867,6 +923,54 @@ bool waitForZoneMovement(int zoneIndex) {
   Serial.printf("Timeout ao mover o servo da zona %d.\n", zoneIndex);
   lastCommandFailureReason = "Timeout do movimento do servo";
   return false;
+}
+
+bool testZoneServo(int zoneIndex) {
+  if (pumpOn) {
+    lastCommandFailureReason = "Desligue a bomba antes de testar o servo";
+    return false;
+  }
+
+  int configIndex = -1;
+  for (int i = 0; i < config.zoneCount; i++) {
+    if (config.zones[i].index == zoneIndex) {
+      configIndex = i;
+      break;
+    }
+  }
+  if (configIndex < 0 || !config.zones[configIndex].hasActuator) {
+    lastCommandFailureReason = "Area sem servo configurado";
+    return false;
+  }
+  if (config.zones[configIndex].desiredState != "CLOSED") {
+    lastCommandFailureReason = "Feche a area antes de testar o servo";
+    return false;
+  }
+
+  Serial.printf("Teste do servo da zona %d: FECHADO -> ABERTO -> FECHADO.\n", zoneIndex);
+  applyZonesFromConfig();
+  if (!waitForZoneMovement(zoneIndex)) {
+    return false;
+  }
+  delay(SERVO_ENDPOINT_HOLD_MS);
+
+  config.zones[configIndex].desiredState = "OPEN";
+  applyZonesFromConfig();
+  if (!waitForZoneMovement(zoneIndex)) {
+    config.zones[configIndex].desiredState = "CLOSED";
+    applyZonesFromConfig();
+    return false;
+  }
+  delay(SERVO_ENDPOINT_HOLD_MS);
+
+  config.zones[configIndex].desiredState = "CLOSED";
+  applyZonesFromConfig();
+  if (!waitForZoneMovement(zoneIndex)) {
+    return false;
+  }
+  delay(SERVO_ENDPOINT_HOLD_MS);
+  Serial.printf("Teste do servo da zona %d concluido.\n", zoneIndex);
+  return true;
 }
 
 void countIrrigationPaths(int& controlledZones, int& openZones) {
@@ -940,10 +1044,10 @@ void applyIrrigationControl() {
     }
 
     int moisture = zoneSoilMoisture[zone.index];
-    if (moisture < config.moistureLimit && zone.desiredState != "OPEN") {
+    if (moisture < zone.moistureLimit && zone.desiredState != "OPEN") {
       zone.desiredState = "OPEN";
       zoneStateChanged = true;
-    } else if (moisture > config.moistureLimit + MOISTURE_HYSTERESIS &&
+    } else if (moisture > zone.moistureLimit + MOISTURE_HYSTERESIS &&
                zone.desiredState != "CLOSED") {
       zone.desiredState = "CLOSED";
       zoneStateChanged = true;
@@ -1054,6 +1158,11 @@ bool syncConfigFromApi() {
     JsonObject z = zonesArray[i];
     config.zones[i].index = z["index"] | i;
     config.zones[i].name = z["name"] | "";
+    config.zones[i].moistureLimit = constrain(
+      z["moistureThreshold"] | config.moistureLimit,
+      0,
+      100
+    );
     config.zones[i].enabled = z["enabled"] | true;
     config.zones[i].desiredState = z["desiredState"] | "CLOSED";
     JsonObject act = z["actuator"];
@@ -1093,13 +1202,14 @@ bool sendTelemetryToApi() {
   http.addHeader("Content-Type", "application/json");
   addDeviceAuthHeader(http);
   StaticJsonDocument<4096> doc;
+  // Agregado legado; automacao e interface usam as leituras dentro de zones.
   doc["soilMoisture"] = soilMoisture;
   doc["pumpOn"] = pumpOn;
   doc["firmwareTimestampMs"] = millis();
   doc["rssi"] = WiFi.RSSI();
   doc["lastIp"] = WiFi.localIP().toString();
   doc["uptimeSeconds"] = (millis() - bootTimeMs) / 1000;
-  doc["firmwareVersion"] = "1.3.0";
+  doc["firmwareVersion"] = "1.4.0";
   if (config.zoneCount > 0) {
     JsonArray zonesArray = doc.createNestedArray("zones");
     for (int i = 0; i < config.zoneCount; i++) {
@@ -1107,6 +1217,7 @@ bool sendTelemetryToApi() {
       int stateIdx = zoneIndexToStateIndex(config.zones[i].index);
       z["zoneIndex"] = config.zones[i].index;
       z["desiredState"] = config.zones[i].desiredState;
+      z["confirmedState"] = "UNAVAILABLE";
       if (isValidHaraPortIndex(config.zones[i].index) &&
           zoneSoilMoisture[config.zones[i].index] >= 0) {
         z["soilMoisture"] = zoneSoilMoisture[config.zones[i].index];
@@ -1253,6 +1364,14 @@ bool executeCommand(const char* type, JsonObject payload) {
     lastCommandFailureReason = "Area invalida ou sem atuador configurado";
     return false;
   }
+  if (strcmp(type, "TEST_ZONE") == 0 && !payload.isNull()) {
+    int zoneIndex = payload["zoneIndex"] | -1;
+    if (zoneIndex < 0) {
+      lastCommandFailureReason = "Area invalida para teste";
+      return false;
+    }
+    return testZoneServo(zoneIndex);
+  }
   if (strcmp(type, "OTA_UPDATE") == 0) {
     Serial.println("OTA_UPDATE nao implementado neste firmware.");
     lastCommandFailureReason = "Atualizacao OTA nao implementada";
@@ -1303,8 +1422,27 @@ bool acknowledgeCommand(const char* commandId, bool success, const String& failR
 // ============================================================
 
 void updateDisplay() {
-  String line1 = "Umi " + String(soilMoisture) + "% ";
-  line1 += pumpOn ? "B:ON" : "B:OFF";
+  String line1;
+  if (config.zoneCount <= 0) {
+    line1 = "Sem areas";
+  } else {
+    if (displayZoneCursor >= config.zoneCount) {
+      displayZoneCursor = 0;
+    }
+    ZoneCfg& zone = config.zones[displayZoneCursor];
+    int moisture = isValidHaraPortIndex(zone.index)
+      ? zoneSoilMoisture[zone.index]
+      : -1;
+    int stateIdx = findZoneStateIndex(zone.index);
+    String servoState = stateIdx >= 0 && zoneStates[stateIdx].targetState == "OPEN"
+      ? "ABR"
+      : "FCH";
+    line1 = "S" + String(zone.index + 1) + " U:";
+    line1 += moisture >= 0 ? String(moisture) + "% " : "--% ";
+    line1 += servoState;
+    displayZoneCursor = (displayZoneCursor + 1) % config.zoneCount;
+  }
+
   String line2;
   if (WiFi.status() != WL_CONNECTED) {
     line2 = "WiFi offline";
@@ -1313,7 +1451,7 @@ void updateDisplay() {
   } else if (!apiReady) {
     line2 = "API HTTP " + String(lastHttpCode);
   } else {
-    line2 = deviceId + " v" + String(config.configVersion);
+    line2 = pumpOn ? "B:ON  WiFi:OK" : "B:OFF WiFi:OK";
   }
   showStatus(line1, line2);
 }
@@ -1354,6 +1492,7 @@ void setup() {
 
   for (int i = 0; i < HARA_PORT_COUNT; i++) {
     pinMode(SOIL_SENSOR_GPIO_PINS[i], INPUT);
+    analogSetPinAttenuation(SOIL_SENSOR_GPIO_PINS[i], ADC_11db);
   }
   analogReadResolution(12);
 

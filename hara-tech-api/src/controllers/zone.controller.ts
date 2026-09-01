@@ -49,6 +49,7 @@ const actuatorSchema = z.object({
 const createZoneSchema = z.object({
   name: z.string().trim().min(2, 'Nome deve ter ao menos 2 caracteres').max(80),
   index: z.number().int().min(0).max(2),
+  moistureThreshold: z.number().int().min(0).max(100).default(35),
   isActive: z.boolean().optional(),
   enabled: z.boolean().optional(),
   actuator: actuatorSchema,
@@ -61,6 +62,7 @@ const updateZoneSchema = z
   .object({
     name: z.string().trim().min(2).max(80).optional(),
     index: z.number().int().min(0).max(2).optional(),
+    moistureThreshold: z.number().int().min(0).max(100).optional(),
     isActive: z.boolean().optional(),
     enabled: z.boolean().optional(),
     actuator: actuatorSchema.optional(),

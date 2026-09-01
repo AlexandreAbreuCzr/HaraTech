@@ -45,13 +45,18 @@ export default function Dashboard() {
   const culturas = culturasStore.list()
   const programacoes = programacoesStore.list()
   const activePlans = programacoes.filter((plan) => plan.ativo)
-  const avgMoisture = telemetries.size ? Math.round(Array.from(telemetries.values()).reduce((sum, item) => sum + item.soilMoisture, 0) / telemetries.size) : null
+  const areaMoistureReadings = Array.from(telemetries.values()).flatMap((telemetry) =>
+    telemetry.zones.flatMap((zone) => zone.soilMoisture === null ? [] : [zone.soilMoisture])
+  )
+  const avgMoisture = areaMoistureReadings.length
+    ? Math.round(areaMoistureReadings.reduce((sum, reading) => sum + reading, 0) / areaMoistureReadings.length)
+    : null
 
   if (loading) return <Layout><div className="space-y-8"><Skeleton className="h-10 w-52" /><Skeleton className="h-24 w-full" /><div className="grid gap-6 lg:grid-cols-2"><Skeleton className="h-72" /><Skeleton className="h-72" /></div></div></Layout>
 
   const metrics = [
     { label: 'Dispositivos online', value: `${online} / ${devices.length}`, detail: devices.length ? `${devices.length - online} offline` : 'Nenhum vinculado' },
-    { label: 'Umidade média', value: avgMoisture === null ? '—' : `${avgMoisture}%`, detail: telemetries.size ? `${telemetries.size} leituras` : 'Sem leitura' },
+    { label: 'Média das áreas', value: avgMoisture === null ? '—' : `${avgMoisture}%`, detail: areaMoistureReadings.length ? `${areaMoistureReadings.length} área${areaMoistureReadings.length === 1 ? '' : 's'} com leitura` : 'Sem leitura por área' },
     { label: 'Culturas', value: culturas.length, detail: 'perfis cadastrados' },
     { label: 'Programações', value: activePlans.length, detail: `${programacoes.length} no total` },
   ]
@@ -81,9 +86,13 @@ export default function Dashboard() {
             <div className="border-t border-[var(--border-primary)]">
               {devices.length === 0 ? <p className="py-10 text-sm text-[var(--text-tertiary)]">Nenhum dispositivo para exibir.</p> : devices.slice(0, 6).map((device) => {
                 const telemetry = telemetries.get(device.deviceId)
+                const readings = telemetry?.zones.flatMap((zone) => zone.soilMoisture === null ? [] : [zone.soilMoisture]) ?? []
+                const deviceAreaAverage = readings.length
+                  ? Math.round(readings.reduce((sum, reading) => sum + reading, 0) / readings.length)
+                  : null
                 return <button key={device.id} onClick={() => navigate(`/dispositivos/${device.deviceId}`)} className="grid w-full grid-cols-[1fr_auto] items-center gap-4 border-b border-[var(--border-primary)] py-4 text-left hover:bg-[#f5f5f5] sm:grid-cols-[1fr_100px_90px_auto] sm:px-2">
                   <span className="min-w-0"><span className="block truncate text-sm font-medium text-black">{device.name || device.deviceId}</span><span className="mt-0.5 block truncate text-xs text-[var(--text-tertiary)]">{device.deviceId}</span></span>
-                  <span className="hidden text-sm text-black sm:block">{telemetry ? `${telemetry.soilMoisture}%` : '—'}</span>
+                  <span className="hidden text-sm text-black sm:block">{deviceAreaAverage === null ? '—' : `${deviceAreaAverage}%`}</span>
                   <span className={`hidden text-xs sm:block ${device.isOnline ? 'text-black' : 'text-[var(--text-tertiary)]'}`}>{device.isOnline ? 'Online' : 'Offline'}</span>
                   <ArrowRight className="size-4 text-[var(--text-tertiary)]" />
                 </button>

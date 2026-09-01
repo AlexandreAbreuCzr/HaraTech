@@ -11,7 +11,7 @@ import {
 import { sendSuccess } from '../utils/response';
 
 const zoneCommandSchema = z.object({
-  type: z.enum(['OPEN_ZONE', 'CLOSE_ZONE']),
+  type: z.enum(['OPEN_ZONE', 'CLOSE_ZONE', 'TEST_ZONE']),
   payload: z.object({ zoneIndex: z.number().int().min(0).max(2) }),
 });
 

@@ -51,7 +51,11 @@ export async function createCommand(
   const device = await getOwnedDevice(userId, deviceId);
 
   return prisma.$transaction(async (tx) => {
-    if (input.type === 'OPEN_ZONE' || input.type === 'CLOSE_ZONE') {
+    if (
+      input.type === 'OPEN_ZONE' ||
+      input.type === 'CLOSE_ZONE' ||
+      input.type === 'TEST_ZONE'
+    ) {
       const zoneIndex = getZoneIndex(input.payload);
       const zone = await tx.zone.findFirst({
         where: { deviceId: device.id, index: zoneIndex },
@@ -70,15 +74,17 @@ export async function createCommand(
         throw new AppError('A area nao corresponde a uma saida fisica valida', 409);
       }
 
-      const isOpening = input.type === 'OPEN_ZONE';
-      await tx.zone.update({
-        where: { id: zone.id },
-        data: {
-          desiredState: isOpening ? 'OPEN' : 'CLOSED',
-          isActive: isOpening,
-        },
-      });
-      await bumpDeviceConfigVersion(tx, device.id);
+      if (input.type !== 'TEST_ZONE') {
+        const isOpening = input.type === 'OPEN_ZONE';
+        await tx.zone.update({
+          where: { id: zone.id },
+          data: {
+            desiredState: isOpening ? 'OPEN' : 'CLOSED',
+            isActive: isOpening,
+          },
+        });
+        await bumpDeviceConfigVersion(tx, device.id);
+      }
     }
 
     if (input.type === 'PUMP_ON' || input.type === 'PUMP_OFF') {
