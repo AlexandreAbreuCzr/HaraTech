@@ -286,7 +286,7 @@ Current Hara Tech hardware mapping:
 
 * Output 1: zone index 0, servo GPIO 13, sensor GPIO 34.
 * Output 2: zone index 1, servo GPIO 14, sensor GPIO 35.
-* Output 3: zone index 2, servo GPIO 25, sensor GPIO 36.
+* Output 3: zone index 2, servo GPIO 25, sensor GPIO 32.
 
 The UI exposes only Output 1/2/3, never raw GPIO fields. Each configured zone owns
 one output, its moisture sensor, and the servo that opens its irrigation register.

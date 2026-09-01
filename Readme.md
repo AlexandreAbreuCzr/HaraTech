@@ -85,7 +85,7 @@ No painel não se informa GPIO. Escolha somente a saída gravada na caixa:
 |---:|---:|---:|
 | 1 | GPIO 13 | GPIO 34 |
 | 2 | GPIO 14 | GPIO 35 |
-| 3 | GPIO 25 | GPIO 36 |
+| 3 | GPIO 25 | GPIO 32 |
 
 Cada saída pode pertencer a uma única área. Saídas sem área permanecem sem comando PWM e fora da telemetria por área.
 

@@ -1,6 +1,6 @@
 # Montagem elétrica e pinagem — Hara Tech
 
-![Diagrama completo das conexões Hara Tech](diagramas/hara-tech-conexoes-completas.png)
+![Diagrama completo das conexões Hara Tech](diagramas/hara-tech-conexoes-completas-v2.png)
 
 Este guia corresponde ao firmware `esp32codes/initial/initial.ino` e à caixa Hara Tech com **três saídas físicas fixas**. No painel o usuário escolhe somente **Saída 1, Saída 2 ou Saída 3**; os GPIOs não são informados nem alterados.
 
@@ -36,7 +36,7 @@ Esta é a pinagem interna definitiva. Ela também é validada pelo firmware, pel
 |---:|---:|---:|---:|---|---|
 | Saída 1 | índice 0 | GPIO 13 | GPIO 34 | fonte externa 5–6 V | 3V3 do ESP32 |
 | Saída 2 | índice 1 | GPIO 14 | GPIO 35 | fonte externa 5–6 V | 3V3 do ESP32 |
-| Saída 3 | índice 2 | GPIO 25 | GPIO 36 | fonte externa 5–6 V | 3V3 do ESP32 |
+| Saída 3 | índice 2 | GPIO 25 | GPIO 32 | fonte externa 5–6 V | 3V3 do ESP32 |
 
 Cada conector deve disponibilizar funcionalmente:
 
@@ -60,7 +60,7 @@ A ordem física desses contatos deve seguir a gravação/etiqueta da própria ca
 | LCD D7 | 5 | Saída |
 | Relé da bomba IN | 26 | Saída |
 
-Não use GPIO 6 a 11, pois são ligados à memória flash. Evite GPIO 0, 2, 4, 12 e 15 em periféricos que alterem seus níveis durante a inicialização. GPIO 34, 35 e 36 são somente entradas e, nesta montagem, recebem os sensores.
+Não use GPIO 6 a 11, pois são ligados à memória flash. Evite GPIO 0, 2, 4, 12 e 15 em periféricos que alterem seus níveis durante a inicialização. GPIO 34 e 35 são somente entradas; o GPIO 32 também pertence ao ADC1 e recebe o sensor da Saída 3 nesta montagem.
 
 ## 4. Ligações por componente
 
@@ -92,7 +92,7 @@ Em cada saída:
 |---|---|
 | VCC | 3V3 do ESP32 |
 | GND | GND comum |
-| AO | GPIO 34, 35 ou 36, conforme Saída 1, 2 ou 3 |
+| AO | GPIO 34, 35 ou 32, conforme Saída 1, 2 ou 3 |
 | DO | Sem ligação |
 
 O AO nunca pode exceder 3,3 V. O firmware usa ADC de 12 bits e parte destes valores:
@@ -153,7 +153,7 @@ Saída 1 sensor AO ─▶│ GPIO 34                │
 Saída 1 servo PWM ◀─│ GPIO 13                │
 Saída 2 sensor AO ─▶│ GPIO 35                │
 Saída 2 servo PWM ◀─│ GPIO 14                │
-Saída 3 sensor AO ─▶│ GPIO 36                │
+Saída 3 sensor AO ─▶│ GPIO 32                │
 Saída 3 servo PWM ◀─│ GPIO 25                │
 relé IN ◀───────────│ GPIO 26                │
 LCD RS/E/D4..D7 ◀───│ 23,22,21,19,18,5      │
@@ -224,6 +224,6 @@ O segredo precisa ser o mesmo `DEVICE_PROVISIONING_SECRET` do backend. Não publ
 | Bomba liga ao iniciar | Tipo do relé incompatível com `PUMP_ACTIVE_HIGH` ou pull-down de 10 kΩ ausente |
 | Bomba não liga | Confirme GPIO 26, relé ativo em HIGH, registro aberto e contato COM/NO |
 | Umidade sempre em 0% ou 100% | Calibração incorreta, AO trocado ou tensão acima de 3,3 V |
-| Área responde na saída errada | Confira a correspondência fixa 1→13/34, 2→14/35 e 3→25/36 |
+| Área responde na saída errada | Confira a correspondência fixa 1→13/34, 2→14/35 e 3→25/32 |
 | LCD acende sem texto | Contraste VO, RW sem GND ou ordem D4–D7 incorreta |
 | ESP32 não inicia | Remova ligações indevidas dos pinos de boot, especialmente GPIO 12 |

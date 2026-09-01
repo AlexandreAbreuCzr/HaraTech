@@ -23,7 +23,7 @@ const int PUMP_RELAY_PIN = 26;
 // O usuario escolhe apenas SAIDA 1, 2 ou 3; estes GPIOs nunca sao configuraveis.
 const int HARA_PORT_COUNT = 3;
 const int SERVO_GPIO_PINS[HARA_PORT_COUNT] = {13, 14, 25};
-const int SOIL_SENSOR_GPIO_PINS[HARA_PORT_COUNT] = {34, 35, 36};
+const int SOIL_SENSOR_GPIO_PINS[HARA_PORT_COUNT] = {34, 35, 32};
 
 LiquidCrystal lcd(
   LCD_RS_PIN,
