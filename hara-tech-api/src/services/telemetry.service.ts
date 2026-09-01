@@ -48,10 +48,19 @@ export async function processTelemetry(
           deviceId: deviceInternalId,
           index: { in: zones.map((zone) => zone.zoneIndex) },
         },
-        select: { id: true, index: true },
+        select: {
+          id: true,
+          index: true,
+          irrigationLogs: {
+            where: { endedAt: null },
+            orderBy: { startedAt: 'desc' },
+            take: 1,
+            select: { id: true, startedAt: true },
+          },
+        },
       })
     : [];
-  const zoneByIndex = new Map(configuredZones.map((zone) => [zone.index, zone.id]));
+  const zoneByIndex = new Map(configuredZones.map((zone) => [zone.index, zone]));
   const now = new Date();
 
   return prisma.$transaction(async (tx) => {
@@ -75,7 +84,7 @@ export async function processTelemetry(
                 servoAngle: zone.servoAngle ?? null,
                 soilMoisture: zone.soilMoisture ?? null,
                 ...(zoneByIndex.has(zone.zoneIndex)
-                  ? { zone: { connect: { id: zoneByIndex.get(zone.zoneIndex)! } } }
+                  ? { zone: { connect: { id: zoneByIndex.get(zone.zoneIndex)!.id } } }
                   : {}),
               })),
             }
@@ -129,6 +138,22 @@ export async function processTelemetry(
         where: { deviceId: deviceInternalId, index: zone.zoneIndex },
         data: updateData,
       });
+
+      // A posicao fisica informada pelo ESP32 e a fonte de verdade. Assim, uma
+      // confirmacao HTTP perdida nao deixa a interface contando uma rega encerrada.
+      if (zone.appliedState === 'CLOSED') {
+        const activeLog = zoneByIndex.get(zone.zoneIndex)?.irrigationLogs[0];
+        if (activeLog) {
+          const durationSeconds = Math.max(
+            0,
+            Math.round((now.getTime() - activeLog.startedAt.getTime()) / 1000)
+          );
+          await tx.irrigationLog.update({
+            where: { id: activeLog.id },
+            data: { endedAt: now, durationSeconds },
+          });
+        }
+      }
     }
 
     return telemetry;

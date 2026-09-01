@@ -71,6 +71,7 @@ const unsigned long TELEMETRY_INTERVAL_MS = 5000;
 const unsigned long COMMAND_INTERVAL_MS = 2000;
 const uint8_t COMMAND_ACK_MAX_ATTEMPTS = 3;
 const unsigned long COMMAND_ACK_RETRY_DELAY_MS = 500;
+const uint8_t COMPLETED_COMMAND_CACHE_SIZE = 12;
 const uint16_t HTTP_TIMEOUT_MS = 10000;
 const unsigned long WDT_TIMEOUT_SEC = 30;
 
@@ -80,7 +81,7 @@ const int SERVO_RESOLUTION = 12;
 const int SERVO_PERIOD_US = 20000;
 const int SERVO_STEP_DEGREES = 1;
 const unsigned long SERVO_STEP_INTERVAL_MS = 20;
-const unsigned long SERVO_MOVE_TIMEOUT_MS = 6000;
+const unsigned long SERVO_MOVE_TIMEOUT_MS = 10000;
 
 // ============================================================
 // ESTADO GLOBAL
@@ -106,6 +107,10 @@ int lastHttpCode = 0;
 bool pumpOn = false;
 bool apiReady = false;
 bool restartRequested = false;
+String lastCommandFailureReason = "";
+String completedCommandIds[COMPLETED_COMMAND_CACHE_SIZE];
+uint8_t completedCommandCount = 0;
+uint8_t completedCommandNext = 0;
 
 struct ActuatorCfg {
   String driver;
@@ -233,6 +238,76 @@ void loadCredentials() {
   prefs.end();
 }
 
+void loadCompletedCommands() {
+  prefs.begin("hara", true);
+  String stored = prefs.getString("cmdDone", "");
+  prefs.end();
+
+  completedCommandCount = 0;
+  completedCommandNext = 0;
+  for (uint8_t i = 0; i < COMPLETED_COMMAND_CACHE_SIZE; i++) {
+    completedCommandIds[i] = "";
+  }
+
+  int start = 0;
+  while (start < stored.length() && completedCommandCount < COMPLETED_COMMAND_CACHE_SIZE) {
+    int separator = stored.indexOf('\n', start);
+    if (separator < 0) {
+      separator = stored.length();
+    }
+    String commandId = stored.substring(start, separator);
+    commandId.trim();
+    if (commandId.length() > 0) {
+      completedCommandIds[completedCommandCount++] = commandId;
+    }
+    start = separator + 1;
+  }
+  completedCommandNext = completedCommandCount % COMPLETED_COMMAND_CACHE_SIZE;
+}
+
+bool commandAlreadyCompleted(const String& commandId) {
+  for (uint8_t i = 0; i < completedCommandCount; i++) {
+    if (completedCommandIds[i] == commandId) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool commandChangesPhysicalOutput(const char* type) {
+  return strcmp(type, "OPEN_ZONE") == 0 ||
+         strcmp(type, "CLOSE_ZONE") == 0 ||
+         strcmp(type, "PUMP_ON") == 0 ||
+         strcmp(type, "PUMP_OFF") == 0;
+}
+
+void rememberCompletedCommand(const String& commandId) {
+  if (commandId.length() == 0 || commandAlreadyCompleted(commandId)) {
+    return;
+  }
+
+  completedCommandIds[completedCommandNext] = commandId;
+  completedCommandNext = (completedCommandNext + 1) % COMPLETED_COMMAND_CACHE_SIZE;
+  if (completedCommandCount < COMPLETED_COMMAND_CACHE_SIZE) {
+    completedCommandCount++;
+  }
+
+  String stored = "";
+  for (uint8_t i = 0; i < COMPLETED_COMMAND_CACHE_SIZE; i++) {
+    if (completedCommandIds[i].length() == 0) {
+      continue;
+    }
+    if (stored.length() > 0) {
+      stored += '\n';
+    }
+    stored += completedCommandIds[i];
+  }
+
+  prefs.begin("hara", false);
+  prefs.putString("cmdDone", stored);
+  prefs.end();
+}
+
 void saveCredentials(const String& id, const String& token) {
   prefs.begin("hara", false);
   if (id.length() > 0) {
@@ -258,11 +333,17 @@ void clearCredentials() {
   prefs.remove("deviceId");
   prefs.remove("deviceToken");
   prefs.remove("configVersion");
+  prefs.remove("cmdDone");
   prefs.end();
   deviceId = "";
   deviceToken = "";
   config.configVersion = 0;
   apiReady = false;
+  completedCommandCount = 0;
+  completedCommandNext = 0;
+  for (uint8_t i = 0; i < COMPLETED_COMMAND_CACHE_SIZE; i++) {
+    completedCommandIds[i] = "";
+  }
 }
 
 bool hasDeviceCredentials() {
@@ -763,8 +844,10 @@ void updateServoMovements(unsigned long now) {
 }
 
 bool waitForZoneMovement(int zoneIndex) {
-  int stateIdx = zoneIndexToStateIndex(zoneIndex);
+  int stateIdx = findZoneStateIndex(zoneIndex);
   if (stateIdx < 0 || !zoneStates[stateIdx].servoAttached) {
+    lastCommandFailureReason = "Servo da area nao esta configurado";
+    Serial.printf("Servo da zona %d nao esta configurado ou conectado ao PWM.\n", zoneIndex);
     return false;
   }
 
@@ -782,6 +865,7 @@ bool waitForZoneMovement(int zoneIndex) {
   }
 
   Serial.printf("Timeout ao mover o servo da zona %d.\n", zoneIndex);
+  lastCommandFailureReason = "Timeout do movimento do servo";
   return false;
 }
 
@@ -1015,7 +1099,7 @@ bool sendTelemetryToApi() {
   doc["rssi"] = WiFi.RSSI();
   doc["lastIp"] = WiFi.localIP().toString();
   doc["uptimeSeconds"] = (millis() - bootTimeMs) / 1000;
-  doc["firmwareVersion"] = "1.2.0";
+  doc["firmwareVersion"] = "1.3.0";
   if (config.zoneCount > 0) {
     JsonArray zonesArray = doc.createNestedArray("zones");
     for (int i = 0; i < config.zoneCount; i++) {
@@ -1093,10 +1177,28 @@ bool checkPendingCommands() {
   for (JsonObject cmd : commands) {
     const char* cmdId = cmd["id"];
     const char* cmdType = cmd["type"];
+    if (cmdId == nullptr || cmdType == nullptr) {
+      Serial.println("Comando ignorado: id ou tipo ausente.");
+      continue;
+    }
     JsonObject payload = cmd["payload"];
     restartRequested = false;
-    bool success = executeCommand(cmdType, payload);
-    bool acknowledged = acknowledgeCommand(cmdId, success, success ? "" : "Falha na execucao");
+    lastCommandFailureReason = "";
+    bool repeated = commandAlreadyCompleted(String(cmdId));
+    bool success = true;
+    if (repeated) {
+      Serial.printf("Comando %s ja executado; reenviando apenas a confirmacao.\n", cmdId);
+    } else {
+      success = executeCommand(cmdType, payload);
+      if (success && commandChangesPhysicalOutput(cmdType)) {
+        // Persiste antes do ACK: se a rede cair, o comando reenviado nao move o hardware de novo.
+        rememberCompletedCommand(String(cmdId));
+      }
+    }
+    String failReason = lastCommandFailureReason.length() > 0
+      ? lastCommandFailureReason
+      : "Falha na execucao";
+    bool acknowledged = acknowledgeCommand(cmdId, success, success ? "" : failReason);
     if (success && acknowledged && restartRequested) {
       delay(500);
       ESP.restart();
@@ -1108,7 +1210,11 @@ bool checkPendingCommands() {
 bool executeCommand(const char* type, JsonObject payload) {
   Serial.printf("Executando comando: %s\n", type);
   if (strcmp(type, "SYNC_CONFIG") == 0) {
-    return syncConfigFromApi();
+    bool synced = syncConfigFromApi();
+    if (!synced) {
+      lastCommandFailureReason = "Falha ao sincronizar configuracao";
+    }
+    return synced;
   }
   if (strcmp(type, "RESTART") == 0) {
     restartRequested = true;
@@ -1117,6 +1223,9 @@ bool executeCommand(const char* type, JsonObject payload) {
   if (strcmp(type, "PUMP_ON") == 0) {
     config.pumpMode = "FORCED_ON";
     setPump(irrigationPathIsSafe());
+    if (!pumpOn) {
+      lastCommandFailureReason = "Nenhum registro aberto para ligar a bomba";
+    }
     return pumpOn;
   }
   if (strcmp(type, "PUMP_OFF") == 0) {
@@ -1131,6 +1240,7 @@ bool executeCommand(const char* type, JsonObject payload) {
       applyPumpSafety();
       return waitForZoneMovement(zoneIndex);
     }
+    lastCommandFailureReason = "Area invalida ou sem atuador configurado";
     return false;
   }
   if (strcmp(type, "CLOSE_ZONE") == 0 && !payload.isNull()) {
@@ -1140,13 +1250,16 @@ bool executeCommand(const char* type, JsonObject payload) {
       applyPumpSafety();
       return waitForZoneMovement(zoneIndex);
     }
+    lastCommandFailureReason = "Area invalida ou sem atuador configurado";
     return false;
   }
   if (strcmp(type, "OTA_UPDATE") == 0) {
     Serial.println("OTA_UPDATE nao implementado neste firmware.");
+    lastCommandFailureReason = "Atualizacao OTA nao implementada";
     return false;
   }
   Serial.printf("Tipo de comando desconhecido: %s\n", type);
+  lastCommandFailureReason = "Tipo de comando desconhecido";
   return false;
 }
 
@@ -1246,6 +1359,7 @@ void setup() {
 
   chipId = getChipId();
   loadCredentials();
+  loadCompletedCommands();
   bootTimeMs = millis();
   connectWifiPortal();
   if (WiFi.status() == WL_CONNECTED) {
