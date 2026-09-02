@@ -393,6 +393,8 @@ export default function DeviceDetail() {
                 const activeLog = zoneLogs.find((log) => !log.endedAt)
                 const stats = getZoneStats(zoneLogs, clock)
                 const zoneTelemetry = telemetry?.zones.find((item) => item.zoneIndex === z.index)
+                const zoneMoisture = zoneTelemetry?.soilMoisture ?? null
+                const hasMoistureReading = zoneMoisture !== null
                 const zoneThreshold = z.moistureThreshold ?? config?.moistureThreshold ?? 35
                 const isWatering = Boolean(activeLog) || (isOpen && Boolean(telemetry?.pumpOn))
                 const hasPendingCommand = commands.some((command) =>
@@ -466,18 +468,24 @@ export default function DeviceDetail() {
                             <Droplets className="size-3.5" /> Umidade desta área
                           </div>
                           <div className="mt-1 text-2xl font-semibold text-black">
-                            {zoneTelemetry?.soilMoisture == null ? '—' : `${zoneTelemetry.soilMoisture}%`}
+                            {hasMoistureReading ? `${zoneMoisture}%` : 'Sensor desconectado'}
                           </div>
                         </div>
                         <div className="text-right text-xs text-[var(--text-tertiary)]">
-                          <div>Inicia abaixo de {zoneThreshold}%</div>
-                          <div>Encerra acima de {Math.min(100, zoneThreshold + 5)}%</div>
+                          {hasMoistureReading ? (
+                            <>
+                              <div>Inicia abaixo de {zoneThreshold}%</div>
+                              <div>Encerra acima de {Math.min(100, zoneThreshold + 5)}%</div>
+                            </>
+                          ) : (
+                            <div>Rega automática bloqueada nesta área</div>
+                          )}
                         </div>
                       </div>
                       <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${moistureColor(zoneTelemetry?.soilMoisture ?? 0, zoneThreshold)}`}
-                          style={{ width: `${zoneTelemetry?.soilMoisture ?? 0}%` }}
+                          className={`h-full rounded-full transition-all duration-500 ${hasMoistureReading ? moistureColor(zoneMoisture, zoneThreshold) : 'bg-[var(--border-primary)]'}`}
+                          style={{ width: hasMoistureReading ? `${zoneMoisture}%` : '100%' }}
                         />
                       </div>
                     </div>

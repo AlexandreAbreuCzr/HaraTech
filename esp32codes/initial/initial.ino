@@ -56,6 +56,9 @@ const bool PUMP_ACTIVE_HIGH = true;
 
 const int SOIL_RAW_DRY = 4095;
 const int SOIL_RAW_WET = 1200;
+// Com resistor de 100 kOhm entre AO e GND, conector vazio fica proximo de 0.
+// Leituras abaixo do ponto molhado calibrado sao eletricamente invalidas.
+const int SOIL_RAW_MIN_VALID = SOIL_RAW_WET;
 const int MOISTURE_HYSTERESIS = 5;
 const uint8_t SENSOR_SAMPLE_COUNT = 15;
 
@@ -552,6 +555,10 @@ int soilRawToPercent(int raw) {
   return constrain(percent, 0, 100);
 }
 
+bool isSoilSensorReadingValid(int raw) {
+  return raw >= SOIL_RAW_MIN_VALID && raw <= SOIL_RAW_DRY;
+}
+
 bool isValidHaraPortIndex(int zoneIndex) {
   return zoneIndex >= 0 && zoneIndex < HARA_PORT_COUNT;
 }
@@ -579,6 +586,19 @@ void readConfiguredSoilMoisture() {
     configuredPorts[portIndex] = true;
     int raw = readSoilRaw(SOIL_SENSOR_GPIO_PINS[portIndex]);
     zoneSoilRaw[portIndex] = raw;
+    if (!isSoilSensorReadingValid(raw)) {
+      zoneSoilFilteredRaw[portIndex] = -1;
+      if (printDiagnostics) {
+        Serial.printf(
+          "Sensor S%d GPIO %d: DESCONECTADO/INVALIDO (ADC=%d, minimo=%d).\n",
+          portIndex + 1,
+          SOIL_SENSOR_GPIO_PINS[portIndex],
+          raw,
+          SOIL_RAW_MIN_VALID
+        );
+      }
+      continue;
+    }
     if (zoneSoilFilteredRaw[portIndex] < 0) {
       zoneSoilFilteredRaw[portIndex] = raw;
     } else {
@@ -1079,8 +1099,16 @@ void applyIrrigationControl() {
   for (int i = 0; i < config.zoneCount; i++) {
     ZoneCfg& zone = config.zones[i];
     if (!zone.enabled || !zone.hasActuator ||
-        !isServoMappedToZone(zone.index, zone.actuator.channel) ||
-        zoneSoilMoisture[zone.index] < 0) {
+        !isServoMappedToZone(zone.index, zone.actuator.channel)) {
+      continue;
+    }
+
+    // Falha segura: sem leitura valida, fecha o registro e nunca sustenta a bomba.
+    if (zoneSoilMoisture[zone.index] < 0) {
+      if (zone.desiredState != "CLOSED") {
+        zone.desiredState = "CLOSED";
+        zoneStateChanged = true;
+      }
       continue;
     }
 
@@ -1257,7 +1285,7 @@ bool sendTelemetryToApi() {
   doc["rssi"] = WiFi.RSSI();
   doc["lastIp"] = WiFi.localIP().toString();
   doc["uptimeSeconds"] = (millis() - bootTimeMs) / 1000;
-  doc["firmwareVersion"] = "1.4.2";
+  doc["firmwareVersion"] = "1.4.3";
   if (config.zoneCount > 0) {
     JsonArray zonesArray = doc.createNestedArray("zones");
     for (int i = 0; i < config.zoneCount; i++) {
@@ -1485,8 +1513,12 @@ void updateDisplay() {
     String servoState = stateIdx >= 0 && zoneStates[stateIdx].targetState == "OPEN"
       ? "ABR"
       : "FCH";
-    line1 = "S" + String(zone.index + 1) + " U:";
-    line1 += moisture >= 0 ? String(moisture) + "% " : "--% ";
+    line1 = "S" + String(zone.index + 1);
+    if (moisture >= 0) {
+      line1 += " U:" + String(moisture) + "% ";
+    } else {
+      line1 += " SENSOR OFF ";
+    }
     line1 += servoState;
     displayZoneCursor = (displayZoneCursor + 1) % config.zoneCount;
   }

@@ -24,6 +24,7 @@ Uma saída que ainda não foi associada a uma área fica sem PWM de servo e é i
 | 1 | Fonte regulada para os servos | 5 a 6 V; mínimo 2 A para testar um servo e 3–5 A para três servos, conforme o modelo |
 | 1 | Fonte da bomba | Conforme a bomba usada |
 | 1 | Capacitor eletrolítico | 1000 µF a 2200 µF / 10 V próximo à distribuição dos servos |
+| 3 | Resistores de pull-down | 100 kΩ, um entre cada sinal AO e GND, para detectar conector de sensor vazio |
 | Diversos | Bornes, conectores, mangueiras e registros | Use bitola adequada para bomba e servos |
 
 > Não alimente a bomba nem os servos pelo pino 5V do ESP32 ou pela USB. Picos de corrente causam reinicializações, movimento irregular e podem danificar a placa. Todos os GNDs de controle devem estar interligados.
@@ -97,6 +98,8 @@ Em cada saída:
 | AO | GPIO 34, 35 ou 32, conforme Saída 1, 2 ou 3 |
 | DO | Sem ligação |
 
+Instale um resistor de **100 kΩ entre AO e GND em cada uma das três saídas**, preferencialmente dentro da caixa. GPIO 34 e GPIO 35 não possuem pull-down interno. O resistor faz o conector vazio resultar em ADC próximo de zero, permitindo ao firmware indicar `Sensor desconectado` em vez de `100%`.
+
 O AO nunca pode exceder 3,3 V. O firmware usa ADC de 12 bits e parte destes valores:
 
 ```cpp
@@ -104,7 +107,7 @@ const int SOIL_RAW_DRY = 4095;
 const int SOIL_RAW_WET = 1200;
 ```
 
-Calibre os valores com os sensores realmente instalados. Cada área envia sua própria leitura de umidade.
+Valores abaixo de `SOIL_RAW_WET` são tratados como leitura inválida/desconectada. Calibre os valores com os sensores realmente instalados. Cada área envia sua própria leitura de umidade; uma área sem leitura válida é bloqueada no modo automático, mas continua disponível para comandos manuais.
 
 ### Servos e registros
 
@@ -241,6 +244,7 @@ O segredo precisa ser o mesmo `DEVICE_PROVISIONING_SECRET` do backend. Não publ
 | Bomba não liga | Confirme GPIO 26, relé ativo em HIGH, registro aberto e contato COM/NO |
 | Umidade sempre em 0% ou 100% | Calibração incorreta, AO trocado ou tensão acima de 3,3 V |
 | Umidade varia sem mudar o solo | Fonte/GND ruidosos; confira no Serial os valores `ADC` e `filtrado`, teste o sensor com bomba e servo desligados |
+| Sem sensor aparece 100% | Grave o firmware 1.4.3 ou superior e instale o resistor de 100 kΩ entre AO e GND da saída |
 | Área responde na saída errada | Confira a correspondência fixa 1→13/34, 2→14/35 e 3→25/32 |
 | LCD acende sem texto | Contraste VO, RW sem GND ou ordem D4–D7 incorreta |
 | ESP32 não inicia | Remova ligações indevidas dos pinos de boot, especialmente GPIO 12 |
