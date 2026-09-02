@@ -109,6 +109,7 @@ bool hasMoistureReading = false;
 int lastHttpCode = 0;
 bool pumpOn = false;
 bool apiReady = false;
+bool configLoaded = false;
 bool restartRequested = false;
 String lastCommandFailureReason = "";
 String completedCommandIds[COMPLETED_COMMAND_CACHE_SIZE];
@@ -241,8 +242,12 @@ void loadCredentials() {
   prefs.begin("hara", false);
   deviceId = prefs.getString("deviceId", "");
   deviceToken = prefs.getString("deviceToken", "");
-  config.configVersion = prefs.getInt("configVersion", 0);
   prefs.end();
+
+  // As areas vivem na API e nao sao persistidas integralmente na ESP32.
+  // Portanto, toda inicializacao deve pedir uma copia completa da configuracao.
+  config.configVersion = 0;
+  configLoaded = false;
 }
 
 void loadCompletedCommands() {
@@ -330,10 +335,7 @@ void saveCredentials(const String& id, const String& token) {
 }
 
 void saveConfigVersion(int version) {
-  prefs.begin("hara", false);
-  prefs.putInt("configVersion", version);
   config.configVersion = version;
-  prefs.end();
 }
 
 void clearCredentials() {
@@ -346,6 +348,7 @@ void clearCredentials() {
   deviceId = "";
   deviceToken = "";
   config.configVersion = 0;
+  configLoaded = false;
   apiReady = false;
   completedCommandCount = 0;
   completedCommandNext = 0;
@@ -1103,7 +1106,13 @@ bool syncConfigFromApi() {
   lastHttpCode = code;
   if (code == 304) {
     http.end();
-    return true;
+    if (configLoaded) {
+      return true;
+    }
+    // Nunca aceite 304 sem possuir as areas em RAM; force download completo.
+    config.configVersion = 0;
+    Serial.println("Config 304 sem cache local; solicitando configuracao completa.");
+    return false;
   }
   if (code != 200) {
     Serial.printf("Falha no sync de config. HTTP %d\n", code);
@@ -1181,6 +1190,7 @@ bool syncConfigFromApi() {
   }
   saveConfigVersion(newVersion);
   applyZonesFromConfig();
+  configLoaded = true;
   Serial.printf("Config sync OK. Versao %d, %d zonas\n", newVersion, config.zoneCount);
   showStatus("Config OK", String(newVersion) + " v" + String(config.zoneCount) + "z");
   return true;
@@ -1209,7 +1219,7 @@ bool sendTelemetryToApi() {
   doc["rssi"] = WiFi.RSSI();
   doc["lastIp"] = WiFi.localIP().toString();
   doc["uptimeSeconds"] = (millis() - bootTimeMs) / 1000;
-  doc["firmwareVersion"] = "1.4.0";
+  doc["firmwareVersion"] = "1.4.1";
   if (config.zoneCount > 0) {
     JsonArray zonesArray = doc.createNestedArray("zones");
     for (int i = 0; i < config.zoneCount; i++) {
@@ -1252,7 +1262,7 @@ bool sendTelemetryToApi() {
 // ============================================================
 
 bool checkPendingCommands() {
-  if (!hasDeviceCredentials()) {
+  if (!hasDeviceCredentials() || !configLoaded) {
     return false;
   }
   HTTPClient http;
