@@ -21,12 +21,14 @@ Uma saída que ainda não foi associada a uma área fica sem PWM de servo e é i
 | 3 | Servos | Um por área, dimensionado para abrir/fechar o registro |
 | 1 | Módulo relé de 1 canal | Entrada compatível com 3,3 V; montagem atual ativa em HIGH |
 | 1 | Bomba DC | Tensão e corrente conforme a fonte e o relé |
-| 1 | Fonte regulada para os servos | 5 a 6 V, dimensionada para a corrente de partida/travamento dos três servos |
+| 1 | Fonte regulada para os servos | 5 a 6 V; mínimo 2 A para testar um servo e 3–5 A para três servos, conforme o modelo |
 | 1 | Fonte da bomba | Conforme a bomba usada |
-| 1 | Capacitor eletrolítico | 470 µF a 1000 µF próximo à distribuição dos servos |
+| 1 | Capacitor eletrolítico | 1000 µF a 2200 µF / 10 V próximo à distribuição dos servos |
 | Diversos | Bornes, conectores, mangueiras e registros | Use bitola adequada para bomba e servos |
 
 > Não alimente a bomba nem os servos pelo pino 5V do ESP32 ou pela USB. Picos de corrente causam reinicializações, movimento irregular e podem danificar a placa. Todos os GNDs de controle devem estar interligados.
+
+> **Nunca aplique 12 V diretamente no servo, ESP32, LCD ou sensor.** Uma fonte de 12 V só pode ser usada através de um conversor buck regulado para 5,0 V, capaz de fornecer a corrente de pico dos servos.
 
 ## 2. As três saídas da caixa
 
@@ -114,7 +116,18 @@ Em cada saída:
 | Vermelho — VCC | Fonte externa regulada de 5 a 6 V |
 | Laranja/amarelo — sinal | GPIO 13, 14 ou 25, conforme Saída 1, 2 ou 3 |
 
-Instale o capacitor de 470 µF a 1000 µF perto da distribuição dos servos. O servo deve movimentar o registro sem permanecer forçando contra o batente mecânico.
+Instale o capacitor de 1000 µF a 2200 µF perto da distribuição dos servos. O servo deve movimentar o registro sem permanecer forçando contra o batente mecânico. Durante o movimento, meça diretamente entre VCC e GND no conector do servo: a tensão deve permanecer aproximadamente entre 4,8 V e 5,2 V em um sistema de 5 V. Quedas para 4,3 V ou 3,3 V indicam fonte, cabo, borne ou distribuição inadequados.
+
+Para testar com um carregador de celular de 5 V:
+
+```text
+carregador +5 V ───────── fio vermelho do servo
+carregador GND ───┬────── fio marrom/preto do servo
+                  └────── GND do ESP32
+GPIO 13 do ESP32 ──────── fio laranja/amarelo do servo da Saída 1
+```
+
+Mantenha o ESP32 alimentado pela USB durante esse teste e não ligue o positivo do carregador ao pino 5V do ESP32. Somente os GNDs são unidos. Teste primeiro um único servo, sem braço, registro ou carga mecânica.
 
 ### Relé e bomba
 
@@ -176,7 +189,7 @@ reservatório → bomba → distribuidor
 
 No modo automático, cada sensor decide somente o estado do registro da própria área. A bomba liga apenas depois que ao menos um registro configurado terminou de abrir, e desliga quando nenhum registro precisa permanecer aberto.
 
-O ESP32 consulta novos comandos a cada 2 segundos. Ao iniciar uma rega manual, primeiro abre o registro da área e liga a bomba imediatamente após a confirmação mecânica do servo; esse pequeno intervalo é uma proteção para a bomba não trabalhar com todas as linhas fechadas.
+O ESP32 consulta novos comandos a cada 2 segundos. Ao iniciar uma rega manual, primeiro conclui a rampa PWM de abertura do servo e só então libera a bomba. Como o servo de três fios não possui retorno de posição, isso confirma o comando elétrico, não a posição mecânica real.
 
 ## 7. Configuração no painel
 
@@ -188,7 +201,7 @@ O ESP32 consulta novos comandos a cada 2 segundos. Ao iniciar uma rega manual, p
 
 Não existe campo de GPIO. Uma saída só pode pertencer a uma área, e o painel não permite criar mais de três áreas. Para desativar uma saída, remova sua área; o firmware deixa de gerar PWM e de usar seu sensor.
 
-O movimento é progressivo, com passo padrão de 1° a cada 20 ms. Um comando só é confirmado depois que o servo chega ao ângulo solicitado ou ocorre timeout.
+O movimento é progressivo, com passo padrão de 1° a cada 20 ms. Um comando é confirmado quando a rampa PWM chega ao ângulo solicitado ou ocorre timeout. Para confirmar fisicamente a válvula, seria necessário adicionar fim de curso, potenciômetro ou outro sensor de posição.
 
 ## 8. Gravação do firmware
 
@@ -221,9 +234,13 @@ O segredo precisa ser o mesmo `DEVICE_PROVISIONING_SECRET` do backend. Não publ
 |---|---|
 | ESP32 reinicia quando o servo move | Fonte dos servos insuficiente, GND comum ausente ou capacitor faltando |
 | Servo vibra | Fonte instável, sinal longo/ruidoso ou ângulo no batente |
+| Servo recebe sinal mas não gira | Meça VCC no próprio servo durante o teste; abaixo de 4,8 V, corrija fonte/cabos antes de alterar o código |
+| Multímetro mostra 0,1–0,9 V no sinal | Normal para a média de PWM de 50 Hz; confira frequência e largura de pulso com osciloscópio/analisador lógico |
+| Área some do LCD após reiniciar | Grave firmware 1.4.2 ou superior; ele força sincronização completa das áreas no boot |
 | Bomba liga ao iniciar | Tipo do relé incompatível com `PUMP_ACTIVE_HIGH` ou pull-down de 10 kΩ ausente |
 | Bomba não liga | Confirme GPIO 26, relé ativo em HIGH, registro aberto e contato COM/NO |
 | Umidade sempre em 0% ou 100% | Calibração incorreta, AO trocado ou tensão acima de 3,3 V |
+| Umidade varia sem mudar o solo | Fonte/GND ruidosos; confira no Serial os valores `ADC` e `filtrado`, teste o sensor com bomba e servo desligados |
 | Área responde na saída errada | Confira a correspondência fixa 1→13/34, 2→14/35 e 3→25/32 |
 | LCD acende sem texto | Contraste VO, RW sem GND ou ordem D4–D7 incorreta |
 | ESP32 não inicia | Remova ligações indevidas dos pinos de boot, especialmente GPIO 12 |

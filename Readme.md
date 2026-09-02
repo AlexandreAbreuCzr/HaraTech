@@ -35,7 +35,7 @@ Sistema IoT para irrigação automatizada com ESP32, API REST e dashboard web.
 - Leitura independente dos três sensores de umidade, um por área
 - Três saídas físicas fixas, cada uma com sensor e servo do registro
 - Controle suave e progressivo dos três servos (PWM)
-- Confirmação de comando somente após o servo atingir o ângulo solicitado
+- Confirmação de comando após concluir a rampa PWM; posição física requer sensor de retorno
 - Validação da pinagem oficial e compatibilidade com Arduino-ESP32 2.x/3.x
 - Sincronização remota de configuração
 - Execução de comandos remotos

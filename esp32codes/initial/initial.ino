@@ -101,10 +101,13 @@ unsigned long lastConfigSyncAt = 0;
 unsigned long lastTelemetryAt = 0;
 unsigned long lastCommandPollAt = 0;
 unsigned long bootTimeMs = 0;
+unsigned long lastSensorDebugAt = 0;
 int displayZoneCursor = 0;
 
 int soilMoisture = 0;
 int zoneSoilMoisture[HARA_PORT_COUNT] = {-1, -1, -1};
+int zoneSoilRaw[HARA_PORT_COUNT] = {-1, -1, -1};
+int zoneSoilFilteredRaw[HARA_PORT_COUNT] = {-1, -1, -1};
 bool hasMoistureReading = false;
 int lastHttpCode = 0;
 bool pumpOn = false;
@@ -524,7 +527,7 @@ bool sendHeartbeat() {
 // SENSORES E ATUADORES
 // ============================================================
 
-int readSoilMoisture(int gpio) {
+int readSoilRaw(int gpio) {
   int samples[SENSOR_SAMPLE_COUNT];
   analogRead(gpio); // Descarta a primeira conversao depois da troca do ADC.
   for (uint8_t i = 0; i < SENSOR_SAMPLE_COUNT; i++) {
@@ -541,7 +544,10 @@ int readSoilMoisture(int gpio) {
     }
     samples[j + 1] = value;
   }
-  int raw = samples[SENSOR_SAMPLE_COUNT / 2];
+  return samples[SENSOR_SAMPLE_COUNT / 2];
+}
+
+int soilRawToPercent(int raw) {
   int percent = map(raw, SOIL_RAW_DRY, SOIL_RAW_WET, 0, 100);
   return constrain(percent, 0, 100);
 }
@@ -556,21 +562,53 @@ bool isServoMappedToZone(int zoneIndex, int servoGpio) {
 }
 
 void readConfiguredSoilMoisture() {
+  bool configuredPorts[HARA_PORT_COUNT] = {false, false, false};
   for (int i = 0; i < HARA_PORT_COUNT; i++) {
     zoneSoilMoisture[i] = -1;
+    zoneSoilRaw[i] = -1;
   }
 
   int total = 0;
   int readingCount = 0;
+  bool printDiagnostics = millis() - lastSensorDebugAt >= 10000;
   for (int i = 0; i < config.zoneCount; i++) {
     int portIndex = config.zones[i].index;
     if (!isValidHaraPortIndex(portIndex)) {
       continue;
     }
-    int moisture = readSoilMoisture(SOIL_SENSOR_GPIO_PINS[portIndex]);
+    configuredPorts[portIndex] = true;
+    int raw = readSoilRaw(SOIL_SENSOR_GPIO_PINS[portIndex]);
+    zoneSoilRaw[portIndex] = raw;
+    if (zoneSoilFilteredRaw[portIndex] < 0) {
+      zoneSoilFilteredRaw[portIndex] = raw;
+    } else {
+      // Filtro temporal: 75% do valor anterior e 25% da nova mediana.
+      zoneSoilFilteredRaw[portIndex] =
+        (zoneSoilFilteredRaw[portIndex] * 3 + raw) / 4;
+    }
+    int moisture = soilRawToPercent(zoneSoilFilteredRaw[portIndex]);
     zoneSoilMoisture[portIndex] = moisture;
     total += moisture;
     readingCount++;
+    if (printDiagnostics) {
+      Serial.printf(
+        "Sensor S%d GPIO %d: ADC=%d, filtrado=%d, umidade=%d%%.\n",
+        portIndex + 1,
+        SOIL_SENSOR_GPIO_PINS[portIndex],
+        raw,
+        zoneSoilFilteredRaw[portIndex],
+        moisture
+      );
+    }
+  }
+
+  for (int i = 0; i < HARA_PORT_COUNT; i++) {
+    if (!configuredPorts[i]) {
+      zoneSoilFilteredRaw[i] = -1;
+    }
+  }
+  if (printDiagnostics) {
+    lastSensorDebugAt = millis();
   }
 
   hasMoistureReading = readingCount > 0;
@@ -1094,7 +1132,7 @@ bool syncConfigFromApi() {
   }
   HTTPClient http;
   String path = "/devices/" + deviceId + "/config";
-  if (config.configVersion > 0) {
+  if (configLoaded && config.configVersion > 0) {
     path += "?configVersion=" + String(config.configVersion);
   }
   if (!beginHttp(http, path)) {
@@ -1219,7 +1257,7 @@ bool sendTelemetryToApi() {
   doc["rssi"] = WiFi.RSSI();
   doc["lastIp"] = WiFi.localIP().toString();
   doc["uptimeSeconds"] = (millis() - bootTimeMs) / 1000;
-  doc["firmwareVersion"] = "1.4.1";
+  doc["firmwareVersion"] = "1.4.2";
   if (config.zoneCount > 0) {
     JsonArray zonesArray = doc.createNestedArray("zones");
     for (int i = 0; i < config.zoneCount; i++) {
