@@ -59,7 +59,6 @@ const int SOIL_RAW_WET = 1200;
 // Com resistor de 100 kOhm entre AO e GND, conector vazio fica proximo de 0.
 // Leituras abaixo do ponto molhado calibrado sao eletricamente invalidas.
 const int SOIL_RAW_MIN_VALID = SOIL_RAW_WET;
-const int MOISTURE_HYSTERESIS = 5;
 const uint8_t SENSOR_SAMPLE_COUNT = 15;
 
 // ============================================================
@@ -117,6 +116,7 @@ bool pumpOn = false;
 bool apiReady = false;
 bool configLoaded = false;
 bool restartRequested = false;
+bool manualPumpHoldOff = false;
 String lastCommandFailureReason = "";
 String completedCommandIds[COMPLETED_COMMAND_CACHE_SIZE];
 uint8_t completedCommandCount = 0;
@@ -136,6 +136,12 @@ struct ZoneCfg {
   int index;
   String name;
   int moistureLimit;
+  bool automationEnabled;
+  int moistureStopLimit;
+  int dryConfirmationSeconds;
+  int minimumIrrigationSeconds;
+  int maximumIrrigationSeconds;
+  int cooldownMinutes;
   bool enabled;
   String desiredState;
   ActuatorCfg actuator;
@@ -169,6 +175,11 @@ struct ZoneState {
   String targetState;
   String appliedState;
   bool servoAttached;
+  unsigned long drySinceAt;
+  unsigned long irrigationStartedAt;
+  unsigned long lastIrrigationEndedAt;
+  bool automationIrrigating;
+  bool manualOverride;
 };
 
 DeviceCfg config = {
@@ -762,6 +773,11 @@ int zoneIndexToStateIndex(int index) {
     zoneStates[pos].targetState = "CLOSED";
     zoneStates[pos].appliedState = "UNKNOWN";
     zoneStates[pos].servoAttached = false;
+    zoneStates[pos].drySinceAt = 0;
+    zoneStates[pos].irrigationStartedAt = 0;
+    zoneStates[pos].lastIrrigationEndedAt = 0;
+    zoneStates[pos].automationIrrigating = false;
+    zoneStates[pos].manualOverride = false;
     zoneStateCount++;
     return pos;
   }
@@ -1064,12 +1080,8 @@ bool irrigationPathIsSafe() {
 }
 
 void applyIrrigationControl() {
-  if (!hasMoistureReading) {
-    setPump(false);
-    return;
-  }
   if (config.pumpMode == "FORCED_ON") {
-    setPump(irrigationPathIsSafe());
+    setPump(!manualPumpHoldOff && irrigationPathIsSafe());
     return;
   }
   if (config.pumpMode == "FORCED_OFF") {
@@ -1094,8 +1106,9 @@ void applyIrrigationControl() {
     return;
   }
 
-  // Cada area decide pelo proprio sensor e movimenta somente o seu registro.
+  // Cada area possui sua propria maquina de estados da rega automatica.
   bool zoneStateChanged = false;
+  unsigned long now = millis();
   for (int i = 0; i < config.zoneCount; i++) {
     ZoneCfg& zone = config.zones[i];
     if (!zone.enabled || !zone.hasActuator ||
@@ -1103,8 +1116,30 @@ void applyIrrigationControl() {
       continue;
     }
 
-    // Falha segura: sem leitura valida, fecha o registro e nunca sustenta a bomba.
-    if (zoneSoilMoisture[zone.index] < 0) {
+    int stateIdx = findZoneStateIndex(zone.index);
+    if (stateIdx < 0) {
+      continue;
+    }
+    ZoneState& state = zoneStates[stateIdx];
+
+    // Uma rega manual permanece sob controle do usuario ate receber CLOSE_ZONE.
+    if (state.manualOverride) {
+      state.drySinceAt = 0;
+      continue;
+    }
+
+    // Desativar a automacao ou perder o sensor sempre encerra um ciclo automatico.
+    if (!zone.automationEnabled || zoneSoilMoisture[zone.index] < 0) {
+      state.drySinceAt = 0;
+      if (state.automationIrrigating) {
+        state.automationIrrigating = false;
+        state.lastIrrigationEndedAt = now;
+        Serial.printf(
+          "Rega AUTO S%d encerrada: %s.\n",
+          zone.index + 1,
+          zone.automationEnabled ? "sensor invalido" : "automacao desativada"
+        );
+      }
       if (zone.desiredState != "CLOSED") {
         zone.desiredState = "CLOSED";
         zoneStateChanged = true;
@@ -1113,13 +1148,62 @@ void applyIrrigationControl() {
     }
 
     int moisture = zoneSoilMoisture[zone.index];
-    if (moisture < zone.moistureLimit && zone.desiredState != "OPEN") {
-      zone.desiredState = "OPEN";
-      zoneStateChanged = true;
-    } else if (moisture > zone.moistureLimit + MOISTURE_HYSTERESIS &&
-               zone.desiredState != "CLOSED") {
+    if (state.automationIrrigating) {
+      unsigned long elapsed = now - state.irrigationStartedAt;
+      bool minimumReached = elapsed >=
+        (unsigned long)zone.minimumIrrigationSeconds * 1000UL;
+      bool maximumReached = elapsed >=
+        (unsigned long)zone.maximumIrrigationSeconds * 1000UL;
+      bool targetReached = minimumReached && moisture >= zone.moistureStopLimit;
+      if (maximumReached || targetReached) {
+        state.automationIrrigating = false;
+        state.lastIrrigationEndedAt = now;
+        state.drySinceAt = 0;
+        zone.desiredState = "CLOSED";
+        zoneStateChanged = true;
+        Serial.printf(
+          "Rega AUTO S%d encerrada: %s, umidade=%d%%, duracao=%lus.\n",
+          zone.index + 1,
+          maximumReached ? "tempo maximo" : "umidade alvo",
+          moisture,
+          elapsed / 1000UL
+        );
+      }
+      continue;
+    }
+
+    // Corrige um OPEN antigo que nao pertence a ciclo automatico nem manual atual.
+    if (zone.desiredState != "CLOSED") {
       zone.desiredState = "CLOSED";
       zoneStateChanged = true;
+    }
+
+    if (moisture >= zone.moistureLimit) {
+      state.drySinceAt = 0;
+      continue;
+    }
+
+    if (state.drySinceAt == 0) {
+      state.drySinceAt = now;
+    }
+    bool dryConfirmed = now - state.drySinceAt >=
+      (unsigned long)zone.dryConfirmationSeconds * 1000UL;
+    bool cooldownReady = state.lastIrrigationEndedAt == 0 ||
+      now - state.lastIrrigationEndedAt >=
+        (unsigned long)zone.cooldownMinutes * 60000UL;
+    if (dryConfirmed && cooldownReady) {
+      state.automationIrrigating = true;
+      state.irrigationStartedAt = now;
+      state.drySinceAt = 0;
+      zone.desiredState = "OPEN";
+      zoneStateChanged = true;
+      Serial.printf(
+        "Rega AUTO S%d iniciada: umidade=%d%%, alvo=%d%%, max=%ds.\n",
+        zone.index + 1,
+        moisture,
+        zone.moistureStopLimit,
+        zone.maximumIrrigationSeconds
+      );
     }
   }
   if (zoneStateChanged) {
@@ -1127,7 +1211,8 @@ void applyIrrigationControl() {
   }
 
   // A bomba so parte depois que pelo menos um registro terminou de abrir.
-  setPump(irrigationPathIsSafe());
+  // Durante a sequencia manual PUMP_OFF -> CLOSE_ZONE ela permanece bloqueada.
+  setPump(!manualPumpHoldOff && irrigationPathIsSafe());
 }
 
 void applyPumpSafety() {
@@ -1236,7 +1321,33 @@ bool syncConfigFromApi() {
     config.zones[i].moistureLimit = constrain(
       z["moistureThreshold"] | config.moistureLimit,
       0,
+      99
+    );
+    config.zones[i].automationEnabled = z["automationEnabled"] | true;
+    config.zones[i].moistureStopLimit = constrain(
+      z["moistureStopThreshold"] | min(100, config.zones[i].moistureLimit + 5),
+      config.zones[i].moistureLimit + 1,
       100
+    );
+    config.zones[i].dryConfirmationSeconds = constrain(
+      z["dryConfirmationSeconds"] | 10,
+      0,
+      300
+    );
+    config.zones[i].minimumIrrigationSeconds = constrain(
+      z["minimumIrrigationSeconds"] | 15,
+      0,
+      600
+    );
+    config.zones[i].maximumIrrigationSeconds = constrain(
+      z["maximumIrrigationSeconds"] | 300,
+      max(10, config.zones[i].minimumIrrigationSeconds),
+      3600
+    );
+    config.zones[i].cooldownMinutes = constrain(
+      z["cooldownMinutes"] | 30,
+      0,
+      1440
     );
     config.zones[i].enabled = z["enabled"] | true;
     config.zones[i].desiredState = z["desiredState"] | "CLOSED";
@@ -1285,7 +1396,7 @@ bool sendTelemetryToApi() {
   doc["rssi"] = WiFi.RSSI();
   doc["lastIp"] = WiFi.localIP().toString();
   doc["uptimeSeconds"] = (millis() - bootTimeMs) / 1000;
-  doc["firmwareVersion"] = "1.4.3";
+  doc["firmwareVersion"] = "1.5.0";
   if (config.zoneCount > 0) {
     JsonArray zonesArray = doc.createNestedArray("zones");
     for (int i = 0; i < config.zoneCount; i++) {
@@ -1408,7 +1519,12 @@ bool executeCommand(const char* type, JsonObject payload) {
     return true;
   }
   if (strcmp(type, "PUMP_ON") == 0) {
-    config.pumpMode = "FORCED_ON";
+    bool manualCycle = payload["manualCycle"] | false;
+    if (!manualCycle) {
+      config.pumpMode = "FORCED_ON";
+    } else {
+      manualPumpHoldOff = false;
+    }
     setPump(irrigationPathIsSafe());
     if (!pumpOn) {
       lastCommandFailureReason = "Nenhum registro aberto para ligar a bomba";
@@ -1417,12 +1533,23 @@ bool executeCommand(const char* type, JsonObject payload) {
   }
   if (strcmp(type, "PUMP_OFF") == 0) {
     setPump(false);
-    config.pumpMode = "FORCED_OFF";
+    bool manualCycle = payload["manualCycle"] | false;
+    if (!manualCycle) {
+      config.pumpMode = "FORCED_OFF";
+    } else {
+      manualPumpHoldOff = true;
+    }
     return true;
   }
   if (strcmp(type, "OPEN_ZONE") == 0 && !payload.isNull()) {
     int zoneIndex = payload["zoneIndex"] | -1;
     if (zoneIndex >= 0 && setZoneDesiredState(zoneIndex, "OPEN")) {
+      int stateIdx = findZoneStateIndex(zoneIndex);
+      if (stateIdx >= 0) {
+        zoneStates[stateIdx].manualOverride = true;
+        zoneStates[stateIdx].automationIrrigating = false;
+        zoneStates[stateIdx].drySinceAt = 0;
+      }
       applyZonesFromConfig();
       applyPumpSafety();
       return waitForZoneMovement(zoneIndex);
@@ -1433,9 +1560,20 @@ bool executeCommand(const char* type, JsonObject payload) {
   if (strcmp(type, "CLOSE_ZONE") == 0 && !payload.isNull()) {
     int zoneIndex = payload["zoneIndex"] | -1;
     if (zoneIndex >= 0 && setZoneDesiredState(zoneIndex, "CLOSED")) {
+      int stateIdx = findZoneStateIndex(zoneIndex);
+      if (stateIdx >= 0) {
+        zoneStates[stateIdx].manualOverride = false;
+        zoneStates[stateIdx].automationIrrigating = false;
+        zoneStates[stateIdx].drySinceAt = 0;
+        zoneStates[stateIdx].lastIrrigationEndedAt = millis();
+      }
       applyZonesFromConfig();
       applyPumpSafety();
-      return waitForZoneMovement(zoneIndex);
+      bool moved = waitForZoneMovement(zoneIndex);
+      if (moved) {
+        manualPumpHoldOff = false;
+      }
+      return moved;
     }
     lastCommandFailureReason = "Area invalida ou sem atuador configurado";
     return false;

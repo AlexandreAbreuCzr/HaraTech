@@ -16,6 +16,12 @@ export interface Zone {
   name: string
   index: number
   moistureThreshold: number
+  automationEnabled: boolean
+  moistureStopThreshold: number
+  dryConfirmationSeconds: number
+  minimumIrrigationSeconds: number
+  maximumIrrigationSeconds: number
+  cooldownMinutes: number
   isActive: boolean
   enabled: boolean
   desiredState: 'OPEN' | 'CLOSED'
@@ -43,6 +49,12 @@ export interface ZoneConfig {
   index: number
   name: string
   moistureThreshold: number
+  automationEnabled: boolean
+  moistureStopThreshold: number
+  dryConfirmationSeconds: number
+  minimumIrrigationSeconds: number
+  maximumIrrigationSeconds: number
+  cooldownMinutes: number
   enabled: boolean
   desiredState: string
   actuator: ActuatorConfig | null

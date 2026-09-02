@@ -2,6 +2,8 @@
 
 Sistema IoT para irrigação automatizada com ESP32, API REST e dashboard web.
 
+Consulte também a [rega automática por área](automacao.md) e a [montagem elétrica](circuito.md).
+
 ## Repositório
 
 ```

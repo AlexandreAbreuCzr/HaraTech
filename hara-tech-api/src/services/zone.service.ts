@@ -18,6 +18,12 @@ export interface CreateZoneInput {
   name: string;
   index: number;
   moistureThreshold: number;
+  automationEnabled: boolean;
+  moistureStopThreshold: number;
+  dryConfirmationSeconds: number;
+  minimumIrrigationSeconds: number;
+  maximumIrrigationSeconds: number;
+  cooldownMinutes: number;
   isActive?: boolean;
   enabled?: boolean;
   actuator: ZoneActuatorInput;
@@ -27,6 +33,12 @@ export interface UpdateZoneInput {
   name?: string;
   index?: number;
   moistureThreshold?: number;
+  automationEnabled?: boolean;
+  moistureStopThreshold?: number;
+  dryConfirmationSeconds?: number;
+  minimumIrrigationSeconds?: number;
+  maximumIrrigationSeconds?: number;
+  cooldownMinutes?: number;
   isActive?: boolean;
   enabled?: boolean;
   actuator?: ZoneActuatorInput;
@@ -37,6 +49,12 @@ const zoneSelect = {
   name: true,
   index: true,
   moistureThreshold: true,
+  automationEnabled: true,
+  moistureStopThreshold: true,
+  dryConfirmationSeconds: true,
+  minimumIrrigationSeconds: true,
+  maximumIrrigationSeconds: true,
+  cooldownMinutes: true,
   isActive: true,
   enabled: true,
   desiredState: true,
@@ -114,6 +132,26 @@ function zoneStateFromInput(isActive?: boolean) {
   return isActive ? 'OPEN' : 'CLOSED';
 }
 
+function validateAutomationSettings(settings: {
+  moistureThreshold: number;
+  moistureStopThreshold: number;
+  minimumIrrigationSeconds: number;
+  maximumIrrigationSeconds: number;
+}) {
+  if (settings.moistureStopThreshold <= settings.moistureThreshold) {
+    throw new AppError(
+      'A umidade para encerrar deve ser maior que a umidade para iniciar',
+      422
+    );
+  }
+  if (settings.maximumIrrigationSeconds < settings.minimumIrrigationSeconds) {
+    throw new AppError(
+      'O tempo maximo deve ser maior ou igual ao tempo minimo',
+      422
+    );
+  }
+}
+
 async function createZoneWithIndex(
   deviceInternalId: string,
   input: CreateZoneInput,
@@ -125,6 +163,12 @@ async function createZoneWithIndex(
         name: input.name,
         index,
         moistureThreshold: input.moistureThreshold,
+        automationEnabled: input.automationEnabled,
+        moistureStopThreshold: input.moistureStopThreshold,
+        dryConfirmationSeconds: input.dryConfirmationSeconds,
+        minimumIrrigationSeconds: input.minimumIrrigationSeconds,
+        maximumIrrigationSeconds: input.maximumIrrigationSeconds,
+        cooldownMinutes: input.cooldownMinutes,
         isActive: input.isActive ?? false,
         desiredState: zoneStateFromInput(input.isActive),
         enabled: input.enabled ?? true,
@@ -161,6 +205,7 @@ export async function createZone(
   if (!isHaraPortMapping(input.index, input.actuator.channel)) {
     throw new AppError('Saida fisica invalida para o Hara Tech', 422);
   }
+  validateAutomationSettings(input);
   await ensureZoneIndexAvailable(device.id, input.index);
 
   try {
@@ -193,6 +238,10 @@ export async function updateZone(
     select: {
       id: true,
       index: true,
+      moistureThreshold: true,
+      moistureStopThreshold: true,
+      minimumIrrigationSeconds: true,
+      maximumIrrigationSeconds: true,
       actuator: { select: { channel: true } },
     },
   });
@@ -206,6 +255,15 @@ export async function updateZone(
   }
 
   const { actuator, isActive, ...zoneChanges } = input;
+  validateAutomationSettings({
+    moistureThreshold: input.moistureThreshold ?? zone.moistureThreshold,
+    moistureStopThreshold:
+      input.moistureStopThreshold ?? zone.moistureStopThreshold,
+    minimumIrrigationSeconds:
+      input.minimumIrrigationSeconds ?? zone.minimumIrrigationSeconds,
+    maximumIrrigationSeconds:
+      input.maximumIrrigationSeconds ?? zone.maximumIrrigationSeconds,
+  });
   if (input.index !== undefined || actuator !== undefined) {
     const nextIndex = input.index ?? zone.index;
     const nextChannel = actuator?.channel ?? zone.actuator?.channel;

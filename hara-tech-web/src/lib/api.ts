@@ -156,6 +156,12 @@ export interface ZoneMutation {
   name?: string
   index?: number
   moistureThreshold?: number
+  automationEnabled?: boolean
+  moistureStopThreshold?: number
+  dryConfirmationSeconds?: number
+  minimumIrrigationSeconds?: number
+  maximumIrrigationSeconds?: number
+  cooldownMinutes?: number
   isActive?: boolean
   enabled?: boolean
   actuator?: { channel: number } & Partial<Pick<ActuatorConfig, 'openAngle' | 'closedAngle' | 'minPulseUs' | 'maxPulseUs' | 'inverted'>>

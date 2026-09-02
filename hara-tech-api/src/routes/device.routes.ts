@@ -37,7 +37,7 @@ import {
 } from '../controllers/irrigation.controller';
 import { getDeviceStatusHandler } from '../controllers/device-status.controller';
 
-const router = Router();
+const router: Router = Router();
 
 const provisioningLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

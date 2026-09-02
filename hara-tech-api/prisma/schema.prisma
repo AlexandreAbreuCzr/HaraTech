@@ -49,6 +49,12 @@ model Zone {
   name              String
   index             Int
   moistureThreshold Int                @default(35)
+  automationEnabled Boolean            @default(true)
+  moistureStopThreshold Int            @default(40)
+  dryConfirmationSeconds Int           @default(10)
+  minimumIrrigationSeconds Int         @default(15)
+  maximumIrrigationSeconds Int         @default(300)
+  cooldownMinutes   Int                @default(30)
   isActive          Boolean            @default(false)
   enabled           Boolean            @default(true)
   desiredState      ZoneDesiredState   @default(CLOSED)

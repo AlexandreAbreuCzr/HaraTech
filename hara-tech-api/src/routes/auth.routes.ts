@@ -2,7 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { register, login } from '../controllers/auth.controller';
 
-const router = Router();
+const router: Router = Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

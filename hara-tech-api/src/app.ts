@@ -1,11 +1,11 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { errorHandler } from './middlewares/errorHandler';
 import authRoutes from './routes/auth.routes';
 import deviceRoutes from './routes/device.routes';
 
-const app = express();
+const app: Express = express();
 
 app.set('trust proxy', 1);
 app.use(cors());

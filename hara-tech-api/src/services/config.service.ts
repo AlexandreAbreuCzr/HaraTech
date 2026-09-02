@@ -21,6 +21,12 @@ export interface ZoneConfig {
   index: number;
   name: string;
   moistureThreshold: number;
+  automationEnabled: boolean;
+  moistureStopThreshold: number;
+  dryConfirmationSeconds: number;
+  minimumIrrigationSeconds: number;
+  maximumIrrigationSeconds: number;
+  cooldownMinutes: number;
   enabled: boolean;
   desiredState: string;
   actuator: ZoneActuatorConfig | null;
@@ -42,6 +48,12 @@ const zoneConfigSelect = {
   index: true,
   name: true,
   moistureThreshold: true,
+  automationEnabled: true,
+  moistureStopThreshold: true,
+  dryConfirmationSeconds: true,
+  minimumIrrigationSeconds: true,
+  maximumIrrigationSeconds: true,
+  cooldownMinutes: true,
   enabled: true,
   desiredState: true,
   actuator: {
@@ -119,6 +131,12 @@ export async function getDeviceConfig(
       index: zone.index,
       name: zone.name,
       moistureThreshold: zone.moistureThreshold,
+      automationEnabled: zone.automationEnabled,
+      moistureStopThreshold: zone.moistureStopThreshold,
+      dryConfirmationSeconds: zone.dryConfirmationSeconds,
+      minimumIrrigationSeconds: zone.minimumIrrigationSeconds,
+      maximumIrrigationSeconds: zone.maximumIrrigationSeconds,
+      cooldownMinutes: zone.cooldownMinutes,
       enabled: zone.enabled,
       desiredState: zone.desiredState,
       actuator: zone.actuator

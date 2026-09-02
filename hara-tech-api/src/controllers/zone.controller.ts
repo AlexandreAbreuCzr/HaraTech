@@ -49,20 +49,41 @@ const actuatorSchema = z.object({
 const createZoneSchema = z.object({
   name: z.string().trim().min(2, 'Nome deve ter ao menos 2 caracteres').max(80),
   index: z.number().int().min(0).max(2),
-  moistureThreshold: z.number().int().min(0).max(100).default(35),
+  moistureThreshold: z.number().int().min(0).max(99).default(35),
+  automationEnabled: z.boolean().default(true),
+  moistureStopThreshold: z.number().int().min(1).max(100).default(40),
+  dryConfirmationSeconds: z.number().int().min(0).max(300).default(10),
+  minimumIrrigationSeconds: z.number().int().min(0).max(600).default(15),
+  maximumIrrigationSeconds: z.number().int().min(10).max(3600).default(300),
+  cooldownMinutes: z.number().int().min(0).max(1440).default(30),
   isActive: z.boolean().optional(),
   enabled: z.boolean().optional(),
   actuator: actuatorSchema,
-}).refine(
-  (data) => isHaraPortMapping(data.index, data.actuator.channel),
-  { message: HARA_PORT_MAPPING_MESSAGE }
-);
+})
+  .refine(
+    (data) => isHaraPortMapping(data.index, data.actuator.channel),
+    { message: HARA_PORT_MAPPING_MESSAGE }
+  )
+  .refine(
+    (data) => data.moistureStopThreshold > data.moistureThreshold,
+    { message: 'A umidade para encerrar deve ser maior que a umidade para iniciar' }
+  )
+  .refine(
+    (data) => data.maximumIrrigationSeconds >= data.minimumIrrigationSeconds,
+    { message: 'O tempo maximo deve ser maior ou igual ao tempo minimo' }
+  );
 
 const updateZoneSchema = z
   .object({
     name: z.string().trim().min(2).max(80).optional(),
     index: z.number().int().min(0).max(2).optional(),
-    moistureThreshold: z.number().int().min(0).max(100).optional(),
+    moistureThreshold: z.number().int().min(0).max(99).optional(),
+    automationEnabled: z.boolean().optional(),
+    moistureStopThreshold: z.number().int().min(1).max(100).optional(),
+    dryConfirmationSeconds: z.number().int().min(0).max(300).optional(),
+    minimumIrrigationSeconds: z.number().int().min(0).max(600).optional(),
+    maximumIrrigationSeconds: z.number().int().min(10).max(3600).optional(),
+    cooldownMinutes: z.number().int().min(0).max(1440).optional(),
     isActive: z.boolean().optional(),
     enabled: z.boolean().optional(),
     actuator: actuatorSchema.optional(),

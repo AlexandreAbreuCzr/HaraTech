@@ -96,7 +96,7 @@ export default function DeviceDetail() {
     try {
       if (start) {
         await api.comandos.criar(deviceId, { type: 'OPEN_ZONE', payload: { zoneIndex: zone.index } })
-        await api.comandos.criar(deviceId, { type: 'PUMP_ON' })
+        await api.comandos.criar(deviceId, { type: 'PUMP_ON', payload: { zoneIndex: zone.index, manualCycle: true } })
         setNotice(`Comando enviado. A rega de “${zone.name}” começará após a confirmação do dispositivo.`)
       } else {
         const anotherZoneIsWatering = zones.some((candidate) => {
@@ -106,7 +106,7 @@ export default function DeviceDetail() {
         })
 
         if (!anotherZoneIsWatering) {
-          await api.comandos.criar(deviceId, { type: 'PUMP_OFF' })
+          await api.comandos.criar(deviceId, { type: 'PUMP_OFF', payload: { zoneIndex: zone.index, manualCycle: true } })
         }
         await api.comandos.criar(deviceId, { type: 'CLOSE_ZONE', payload: { zoneIndex: zone.index } })
         setNotice(`Comando enviado. A rega de “${zone.name}” será encerrada pelo dispositivo.`)
@@ -396,6 +396,8 @@ export default function DeviceDetail() {
                 const zoneMoisture = zoneTelemetry?.soilMoisture ?? null
                 const hasMoistureReading = zoneMoisture !== null
                 const zoneThreshold = z.moistureThreshold ?? config?.moistureThreshold ?? 35
+                const zoneStopThreshold = z.moistureStopThreshold ?? Math.min(100, zoneThreshold + 5)
+                const automationEnabled = z.automationEnabled ?? true
                 const isWatering = Boolean(activeLog) || (isOpen && Boolean(telemetry?.pumpOn))
                 const hasPendingCommand = commands.some((command) =>
                   (command.status === 'PENDING' || command.status === 'SENT') &&
@@ -472,10 +474,12 @@ export default function DeviceDetail() {
                           </div>
                         </div>
                         <div className="text-right text-xs text-[var(--text-tertiary)]">
-                          {hasMoistureReading ? (
+                          {!automationEnabled ? (
+                            <div>Rega automática desativada</div>
+                          ) : hasMoistureReading ? (
                             <>
                               <div>Inicia abaixo de {zoneThreshold}%</div>
-                              <div>Encerra acima de {Math.min(100, zoneThreshold + 5)}%</div>
+                              <div>Encerra em {zoneStopThreshold}%</div>
                             </>
                           ) : (
                             <div>Rega automática bloqueada nesta área</div>
@@ -678,6 +682,12 @@ function ZoneForm({
   const [openAngle, setOpenAngle] = useState(zone?.actuator?.openAngle?.toString() ?? '90')
   const [closedAngle, setClosedAngle] = useState(zone?.actuator?.closedAngle?.toString() ?? '10')
   const [moistureThreshold, setMoistureThreshold] = useState(zone?.moistureThreshold?.toString() ?? '35')
+  const [automationEnabled, setAutomationEnabled] = useState(zone?.automationEnabled ?? true)
+  const [moistureStopThreshold, setMoistureStopThreshold] = useState(zone?.moistureStopThreshold?.toString() ?? '40')
+  const [dryConfirmationSeconds, setDryConfirmationSeconds] = useState(zone?.dryConfirmationSeconds?.toString() ?? '10')
+  const [minimumIrrigationSeconds, setMinimumIrrigationSeconds] = useState(zone?.minimumIrrigationSeconds?.toString() ?? '15')
+  const [maximumIrrigationSeconds, setMaximumIrrigationSeconds] = useState(zone?.maximumIrrigationSeconds?.toString() ?? '300')
+  const [cooldownMinutes, setCooldownMinutes] = useState(zone?.cooldownMinutes?.toString() ?? '30')
   const [inverted, setInverted] = useState(zone?.actuator?.inverted ?? false)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -694,6 +704,11 @@ function ZoneForm({
     const parsedOpenAngle = Number(openAngle)
     const parsedClosedAngle = Number(closedAngle)
     const parsedMoistureThreshold = Number(moistureThreshold)
+    const parsedMoistureStopThreshold = Number(moistureStopThreshold)
+    const parsedDryConfirmationSeconds = Number(dryConfirmationSeconds)
+    const parsedMinimumIrrigationSeconds = Number(minimumIrrigationSeconds)
+    const parsedMaximumIrrigationSeconds = Number(maximumIrrigationSeconds)
+    const parsedCooldownMinutes = Number(cooldownMinutes)
     if (!selectedPort) {
       setFormError('Selecione a saída 1, 2 ou 3 da caixa.')
       return
@@ -710,8 +725,28 @@ function ZoneForm({
       setFormError('Use ângulos inteiros entre 0° e 180°, com abertura e fechamento diferentes.')
       return
     }
-    if (!Number.isInteger(parsedMoistureThreshold) || parsedMoistureThreshold < 0 || parsedMoistureThreshold > 100) {
-      setFormError('A umidade mínima deve ser um número inteiro entre 0% e 100%.')
+    if (!Number.isInteger(parsedMoistureThreshold) || parsedMoistureThreshold < 0 || parsedMoistureThreshold > 99) {
+      setFormError('A umidade para iniciar deve ser um número inteiro entre 0% e 99%.')
+      return
+    }
+    if (!Number.isInteger(parsedMoistureStopThreshold) || parsedMoistureStopThreshold <= parsedMoistureThreshold || parsedMoistureStopThreshold > 100) {
+      setFormError('A umidade para encerrar deve ser maior que a de início e no máximo 100%.')
+      return
+    }
+    if (!Number.isInteger(parsedDryConfirmationSeconds) || parsedDryConfirmationSeconds < 0 || parsedDryConfirmationSeconds > 300) {
+      setFormError('A confirmação de solo seco deve ficar entre 0 e 300 segundos.')
+      return
+    }
+    if (!Number.isInteger(parsedMinimumIrrigationSeconds) || parsedMinimumIrrigationSeconds < 0 || parsedMinimumIrrigationSeconds > 600) {
+      setFormError('O tempo mínimo deve ficar entre 0 e 600 segundos.')
+      return
+    }
+    if (!Number.isInteger(parsedMaximumIrrigationSeconds) || parsedMaximumIrrigationSeconds < 10 || parsedMaximumIrrigationSeconds > 3600 || parsedMaximumIrrigationSeconds < parsedMinimumIrrigationSeconds) {
+      setFormError('O tempo máximo deve ficar entre 10 e 3600 segundos e não pode ser menor que o mínimo.')
+      return
+    }
+    if (!Number.isInteger(parsedCooldownMinutes) || parsedCooldownMinutes < 0 || parsedCooldownMinutes > 1440) {
+      setFormError('O intervalo entre regas deve ficar entre 0 e 1440 minutos.')
       return
     }
 
@@ -721,6 +756,12 @@ function ZoneForm({
         name: name.trim(),
         index: selectedPort.zoneIndex,
         moistureThreshold: parsedMoistureThreshold,
+        automationEnabled,
+        moistureStopThreshold: parsedMoistureStopThreshold,
+        dryConfirmationSeconds: parsedDryConfirmationSeconds,
+        minimumIrrigationSeconds: parsedMinimumIrrigationSeconds,
+        maximumIrrigationSeconds: parsedMaximumIrrigationSeconds,
+        cooldownMinutes: parsedCooldownMinutes,
         actuator: {
           channel: selectedPort.servoGpio,
           openAngle: parsedOpenAngle,
@@ -742,15 +783,84 @@ function ZoneForm({
         placeholder="Ex.: Horta de alface"
         required
       />
-      <Input
-        label="Umidade mínima desta área (%)"
-        type="number"
-        value={moistureThreshold}
-        onChange={(event) => setMoistureThreshold(event.target.value)}
-        min={0}
-        max={100}
-        required
-      />
+      <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-4">
+        <label className="flex items-start gap-3 text-sm text-[var(--text-secondary)]">
+          <input
+            type="checkbox"
+            checked={automationEnabled}
+            onChange={(event) => setAutomationEnabled(event.target.checked)}
+            className="mt-0.5 size-4 rounded border-[var(--border-primary)]"
+          />
+          <span>
+            <span className="block font-medium text-black">Ativar rega automática nesta área</span>
+            <span className="mt-1 block text-xs leading-5 text-[var(--text-tertiary)]">
+              O ESP32 toma a decisão localmente pelo sensor, mesmo sem internet.
+            </span>
+          </span>
+        </label>
+        {automationEnabled && (
+          <div className="mt-4 space-y-3 border-t border-[var(--border-primary)] pt-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Iniciar abaixo de (%)"
+                type="number"
+                value={moistureThreshold}
+                onChange={(event) => setMoistureThreshold(event.target.value)}
+                min={0}
+                max={99}
+                required
+              />
+              <Input
+                label="Encerrar em (%)"
+                type="number"
+                value={moistureStopThreshold}
+                onChange={(event) => setMoistureStopThreshold(event.target.value)}
+                min={1}
+                max={100}
+                required
+              />
+            </div>
+            <Input
+              label="Confirmar solo seco por (segundos)"
+              type="number"
+              value={dryConfirmationSeconds}
+              onChange={(event) => setDryConfirmationSeconds(event.target.value)}
+              min={0}
+              max={300}
+              required
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Tempo mínimo (segundos)"
+                type="number"
+                value={minimumIrrigationSeconds}
+                onChange={(event) => setMinimumIrrigationSeconds(event.target.value)}
+                min={0}
+                max={600}
+                required
+              />
+              <Input
+                label="Tempo máximo (segundos)"
+                type="number"
+                value={maximumIrrigationSeconds}
+                onChange={(event) => setMaximumIrrigationSeconds(event.target.value)}
+                min={10}
+                max={3600}
+                required
+              />
+            </div>
+            <Input
+              label="Intervalo mínimo entre regas (minutos)"
+              type="number"
+              value={cooldownMinutes}
+              onChange={(event) => setCooldownMinutes(event.target.value)}
+              min={0}
+              max={1440}
+              required
+            />
+          </div>
+        )}
+      </div>
       <Select
         label="Saída da caixa"
         value={portIndex}
